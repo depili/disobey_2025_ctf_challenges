@@ -1,0 +1,466 @@
+ AS V1.42 Beta [Bld 254] - Source File rop.asm - Page 1 - 09.02.2025 18:16:50
+
+
+    1/   0 :                            		CPU     8051
+    2/   0 :                            
+    3/   0 :                            		INCLUDE p80c51fa.inc
+(1)    1/   0 : =>UNDEFINED             	ifndef  p80c51fainc     ; avoid multiple inclusion
+(1)    2/   0 : =1H                     		equ     p80c51fainc, 1
+(1)    3/   0 :                         		save
+(1)  207/   0 : ALL                                     restore                 ; re-allow listing
+(1)  208/   0 :                         
+(1)  209/   0 : [1]                                     endif			; stddef51inc
+(1)  210/   0 :                         
+    4/   0 :                            
+    5/   0 :                            
+    6/   0 : =0FFF3H                    T2_RELOAD       EQU     0FFF3H          ; 38,4kbit/s @ 16 MHz
+    7/   0 : =10H                       BUF_LEN         EQU     16              ; Serial receive buffer size
+    8/   0 : =30H                       rx_buf          EQU     30H             ; Serial receive buffer location, idata
+    9/   0 : =40H                       stack           EQU     40H             ; Stack start location, idata
+   10/   0 :                            
+   11/   0 : =6020H                     lcd_cmd         EQU     6020h           ; LCD command register address, extmem
+   12/   0 : =6021H                     lcd_data        EQU     6021h           ; LCD data register address, extmem
+   13/   0 :                            
+   14/   0 :                            
+   15/   0 : =0H                        		.EQU	paulmon2, 0
+   16/   0 :                            
+   17/   0 : =36H                       	.equ	pm.phex1,	36h + paulmon2	; Print a single hex digit
+   18/   0 :                            
+   19/   0 : =38H                       	.equ    pm.cout,	38h + paulmon2	; Send Acc to serial port
+   20/   0 :                            
+   21/   0 : =3AH                       	.equ    pm.cin, 	3Ah + paulmon2	; Get Acc from serial port
+   22/   0 :                            
+   23/   0 : =3CH                       	.equ    pm.phex, 	3Ch + paulmon2	; Print Hex value of Acc
+   24/   0 :                            
+   25/   0 : =3EH                       	.equ    pm.phex16, 	3Eh + paulmon2	; Print Hex value of DPTR
+   26/   0 :                            
+   27/   0 :                            
+   28/   0 :                            		ORG     0H           ; Program location
+   29/   0 :                            
+   30/   0 : (MACRO)                    		USING	0
+   30/   0 : =>FALSE                                    if      (0<0)||(0>3)          ; only 0 0..3 allowed
+   30/   0 :                                             error  "Wrong 0 number: \{0}"
+   30/   0 : [30]                                       endif
+   30/   0 :                            
+   30/   0 : =>UNDEFINED                                ifdef   RegUsage        ; Book-Keeping about Used Banks
+   30/   0 :                            RegUsage         set    RegUsage|(2^0)
+   30/   0 : =>TRUE                                     elseif
+   30/   0 : =1H                        RegUsage         set    2^0
+   30/   0 : [30]                                       endif
+   30/   0 :                            
+   30/   0 : =0H                        ar0             set     0*8          ; Set Symbols
+   30/   0 : =1H                        ar1             set     ar0+1
+   30/   0 : =2H                        ar2             set     ar0+2
+   30/   0 : =3H                        ar3             set     ar0+3
+   30/   0 : =4H                        ar4             set     ar0+4
+   30/   0 : =5H                        ar5             set     ar0+5
+   30/   0 : =6H                        ar6             set     ar0+6
+   30/   0 : =7H                        ar7             set     ar0+7
+   31/   0 :                            
+   32/   0 :                            ; -----------------------------------------------
+   33/   0 : 75 81 3F                   		MOV     SP,#stack-1                     ; Set the application stack address
+   34/   3 :                            
+   35/   3 : 75 CB FF                   		MOV     RCAP2H,#T2_RELOAD >> 8          ; load 16-bit value to timer
+ AS V1.42 Beta [Bld 254] - Source File rop.asm - Page 2 - 09.02.2025 18:16:50
+
+
+   36/   6 : 75 CA F3                   		MOV     RCAP2L,#T2_RELOAD & 0FFH
+   37/   9 : 75 C8 34                   		MOV     T2CON,#34H                      ; TCLK + RCLK + TR2
+   38/   C :                            
+   39/   C : 75 98 50                   		MOV     SCON,#50H                       ; mode 1 + REN
+   40/   F : D2 99                      		SETB    TI                              ; Set transmitter empty status bit
+   41/  11 : C2 98                      		CLR     RI                              ; Clear receiver buffer full bit
+   42/  13 : 02 20 00                   		jmp	start
+   43/  16 :                            
+   44/  16 :                            gimme:
+   45/  16 : 90 21 48                   		mov	dptr, #flag
+   46/  19 : 12 20 CF                   		call	send_string_code
+   47/  1C : 02 20 00                   		jmp	start
+   48/  1F :                            
+   49/  1F :                            
+   50/2000 :                            		org	2000h
+   51/2000 :                            start:
+   52/2000 :                            
+   53/2000 : 53 A2 FE                   		ANL     AUXR1, #0FEh                    ; Clear DPS bit in AUXR1, setting DPTR0 as active
+   54/2003 :                            
+   55/2003 : 90 60 20                   		MOV     DPTR, #lcd_cmd                  ; Load lcd command register address
+   56/2006 : 74 38                      		MOV     A, #00111000b                   ; Hitachi lcd command: display function set: 8bit interface, 2 lines, 5x8 font
+   57/2008 : F0                         		MOVX     @DPTR, A
+   58/2009 : 11 C6                      		CALL    lcd_delay_long                  ; Delay for LCD command processing
+   59/200B :                            
+   60/200B : 74 0C                      		MOV     A, #00001100b                   ; LCD command; display set, set display off, no cursor, no blink
+   61/200D : F0                         		MOVX    @DPTR, A
+   62/200E : 11 C6                      		CALL    lcd_delay_long
+   63/2010 :                            
+   64/2010 : 74 01                      		MOV     A, #1                           ; LCD command: clear display
+   65/2012 : F0                         		MOVX    @DPTR, A
+   66/2013 : 11 C6                      		CALL    lcd_delay_long
+   67/2015 :                            
+   68/2015 : 74 02                      		MOV     A, #2                           ; LCD command: home cursor
+   69/2017 : F0                         		MOVX    @DPTR, A
+   70/2018 : 11 C6                      		CALL    lcd_delay_long
+   71/201A :                            
+   72/201A : 90 20 A3                   		MOV     DPTR, #lcd_glyph                ; Load LCD custom glyph data pointer
+   73/201D : 11 34                      		CALL    lcd_setup_glyph                 ; Setup custom character
+   74/201F :                            
+   75/201F : 90 20 AB                   		MOV     DPTR, #lcd_string               ; Load LCD welcome message pointer
+   76/2022 : 11 8D                      		CALL    lcd_print                       ; Print the message from code
+   77/2024 :                            
+   78/2024 :                            .receive_loop:                                          ; Loop for reading data from UART and then printing it out on the LCD
+   79/2024 : 90 60 20                   		MOV     DPTR, #lcd_cmd
+   80/2027 : 74 C0                      		MOV     A, #11000000b                   ; LCD command, set DDRAM address to 64, start of row 2
+   81/2029 : F0                         		MOVX    @DPTR, A
+   82/202A : 11 C6                      		CALL    lcd_delay_long
+   83/202C :                            
+   84/202C : 11 EC                      		CALL    receive_string                  ; Receive a string up to 16 characters long from serial
+   85/202E : 78 30                      		MOV     R0, #rx_buf                     ; Load a pointer to the received string
+   86/2030 : 11 5A                      		CALL    lcd_print_idata                 ; Print the string on the LCD
+   87/2032 : 80 F0                      		JMP     .receive_loop                   ; Loop again
+   88/2034 :                            
+   89/2034 :                            ; Setup a custom character by loading 8 bytes of data pointed by DPTR into CGRAM starting at location 0
+   90/2034 :                            ; Destroys A, R0, second DPTR
+   91/2034 :                            lcd_setup_glyph:
+   92/2034 : 05 A2                      		INC     AUXR1                           ; Switch to the second DPTR
+   93/2036 : 90 60 20                   		MOV     DPTR, #lcd_cmd
+   94/2039 : 74 40                      		MOV     A, #01000000b                   ; LCD command: Set CGRAM address 0
+   95/203B : F0                         		MOVX    @DPTR, A
+ AS V1.42 Beta [Bld 254] - Source File rop.asm - Page 3 - 09.02.2025 18:16:50
+
+
+   96/203C : 11 C6                      		CALL    lcd_delay_long
+   97/203E : 90 60 21                   		MOV     DPTR, #lcd_data                 ; Set the second DPTR to LCD data register
+   98/2041 : 78 08                      		MOV     R0, #8                          ; Lenght of the custom glyph
+   99/2043 : 05 A2                      		INC     AUXR1                           ; Switch back to the original DPTR, pointing to the glyph data
+  100/2045 :                            .loop:
+  101/2045 : E4                         		CLR     A
+  102/2046 : 93                         		MOVC    A, @A+DPTR                      ; Read the glyph byte from code
+  103/2047 : A3                         		INC     DPTR                            ; Increment the DPTR to the next byte
+  104/2048 : 05 A2                      		INC     AUXR1                           ; Switch to the second DPTR pointing to the lcd data register
+  105/204A : F0                         		MOVX    @DPTR, A                        ; Send the glyph byte to the LCD
+  106/204B : 11 BD                      		CALL    lcd_delay                       ; Delay for LCD data input
+  107/204D : 05 A2                      		INC     AUXR1                           ; Switch DPTR to the glyph data pointer
+  108/204F : D8 F4                      		DJNZ    R0, .loop                       ; Decrement R0, loop again if not zero
+  109/2051 : 90 60 20                   		MOV     DPTR, #lcd_cmd
+  110/2054 : 74 02                      		MOV     A, #2                           ; LCD command: Home cursor, switces writes back to DDRAM
+  111/2056 : F0                         		MOVX    @DPTR, A
+  112/2057 : 11 C6                      		CALL    lcd_delay_long                  ; LCD command delay
+  113/2059 : 22                         		RET
+  114/205A :                            
+  115/205A :                            ; Print a string from idata pointed by R0 to the LCD
+  116/205A :                            ; Destroys DPTR, A
+  117/205A :                            lcd_print_idata:
+  118/205A : 90 60 21                   		MOV     DPTR, #lcd_data                 ; Set DPTR to lcd data register
+  119/205D :                            .lcd_loop:
+  120/205D : E6                         		MOV     A, @R0                          ; Read a byte from idata via R0
+  121/205E : 60 06                      		JZ      .end                            ; If the byte was 0 return
+  122/2060 : 08                         		INC     R0                              ; Increment R0
+  123/2061 : F0                         		MOVX    @dptr, A                        ; Load the byte into LCD data pointer
+  124/2062 : 11 BD                      		CALL    lcd_delay                       ; LCD write delay
+  125/2064 : 80 F7                      		JMP     .lcd_loop                       ; Loop again
+  126/2066 :                            .end:
+  127/2066 : 22                         		RET
+  128/2067 :                            
+  129/2067 :                            print_flag:
+  130/2067 : 90 21 48                   		MOV	DPTR, #flag
+  131/206A : B4 0D 03                   		CJNE	A, #0Dh, +
+  132/206D : 02 20 73                   		LJMP	++
+  133/2070 : 02 20 00                   +		LJMP	start
+  134/2073 : BF 2A 03                   +		CJNE	R7, #2Ah, +
+  135/2076 : 02 20 7C                   		LJMP	++
+  136/2079 : 02 20 00                   +		LJMP	start
+  137/207C : BE 42 03                   +		CJNE	R6, #42h, +
+  138/207F : 02 20 85                   		LJMP	++
+  139/2082 : 02 20 00                   +		LJMP	start
+  140/2085 : 11 CF                      +		CALL	send_string_code
+  141/2087 : 02 20 00                   		LJMP	start
+  142/208A : D0 E0                      		POP	ACC
+  143/208C : 22                         		RET
+  144/208D :                            
+  145/208D :                            
+  146/208D :                            ; Print a string from code memory pointed by DPTR to the LCD
+  147/208D :                            ; Destroys A, second DPTR
+  148/208D :                            lcd_print:
+  149/208D : 05 A2                      		INC     AUXR1                           ; Switch to second DPTR
+  150/208F : 90 60 21                   		MOV     DPTR, #lcd_data                 ; Set it to point to LCD data register
+  151/2092 : 05 A2                      		INC     AUXR1                           ; Switch back to the string DPTR
+  152/2094 :                            .lcd_loop:
+  153/2094 : E4                         		CLR     A
+  154/2095 : 93                         		MOVC    A, @a+dptr                      ; Load a byte of the string into A
+  155/2096 : 60 0A                      		JZ      .end                            ; If A is zero return
+ AS V1.42 Beta [Bld 254] - Source File rop.asm - Page 4 - 09.02.2025 18:16:50
+
+
+  156/2098 : A3                         		INC     DPTR                            ; Increment the string pointer
+  157/2099 : 05 A2                      		INC     AUXR1                           ; Switch to the LCD data pointer
+  158/209B : F0                         		MOVX    @dptr, A                        ; Send the string byte to the LCD
+  159/209C : 11 BD                      		CALL    lcd_delay                       ; LCD write delay
+  160/209E : 05 A2                      		INC     AUXR1                           ; Switch back to string pointer
+  161/20A0 : 80 F2                      		JMP     .lcd_loop                       ; Loop again
+  162/20A2 :                            .end:
+  163/20A2 : 22                         		RET
+  164/20A3 :                            
+  165/20A3 :                            ; LCD custom glyph
+  166/20A3 :                            lcd_glyph:
+  167/20A3 : 11 0A 0A 00 11             	DB      011h,00Ah,00Ah,000h,011h
+  168/20A8 : D0 06                      	POP	AR6
+  169/20AA : 22                         	RET
+  170/20AB :                            
+  171/20AB :                            lcd_string:
+  172/20AB : 4B 6F 75 76 6F 73 74 6F 20 	DB      "Kouvosto Telecom", 8, 0
+      20B4 : 54 65 6C 65 63 6F 6D 08 00
+  173/20BD :                            
+  174/20BD :                            ; Short LCD write delay
+  175/20BD :                            lcd_delay:
+  176/20BD : C0 07                      	PUSH	AR7
+  177/20BF : 7F 18                      	MOV     r7, #018h
+  178/20C1 : DF FE                      	DJNZ    r7, $
+  179/20C3 : D0 07                      	POP	AR7
+  180/20C5 : 22                         	RET
+  181/20C6 :                            
+  182/20C6 :                            ; LCD command delay
+  183/20C6 :                            lcd_delay_long:
+  184/20C6 : 7F 0F                      	MOV     r7, #00Fh
+  185/20C8 : 7E FF                      -       MOV     r6, #0FFh
+  186/20CA : DE FE                      	DJNZ    r6, $
+  187/20CC : DF FA                      	DJNZ    r7, -
+  188/20CE : 22                         	RET
+  189/20CF :                            
+  190/20CF :                            
+  191/20CF :                            ; -----------------------------------------------
+  192/20CF :                            ; Send zero-terminated string from CODE pointed by DPTR
+  193/20CF :                            send_string_code:
+  194/20CF : E4                         		CLR     A
+  195/20D0 : 93                         		MOVC    A,@A+DPTR
+  196/20D1 : 60 05                      		JZ      .done
+  197/20D3 : 11 E2                      		CALL    send_char
+  198/20D5 :                            
+  199/20D5 : A3                         		INC     DPTR
+  200/20D6 : 80 F7                      		JMP     send_string_code
+  201/20D8 :                            .done:
+  202/20D8 : 22                         		RET
+  203/20D9 :                            
+  204/20D9 :                            ; -----------------------------------------------
+  205/20D9 :                            ; Send zero-terminated string from IDATA pointed by R0
+  206/20D9 :                            send_string_idata:
+  207/20D9 : E6                         		MOV     A,@R0
+  208/20DA : 60 05                      		JZ      .done
+  209/20DC : 11 E2                      		CALL    send_char
+  210/20DE :                            
+  211/20DE : 08                         		INC     R0
+  212/20DF : 80 F8                      		JMP     send_string_idata
+  213/20E1 :                            .done:
+  214/20E1 : 22                         		RET
+ AS V1.42 Beta [Bld 254] - Source File rop.asm - Page 5 - 09.02.2025 18:16:50
+
+
+  215/20E2 :                            
+  216/20E2 :                            ; -----------------------------------------------
+  217/20E2 :                            ; Wait for previous char to be sent, send char in A
+  218/20E2 :                            send_char:
+  219/20E2 : 30 99 FD                   		JNB     TI,$
+  220/20E5 : C2 99                      		CLR     TI
+  221/20E7 : F5 99                      		MOV     SBUF,A
+  222/20E9 : 22                         		RET
+  223/20EA :                            
+  224/20EA :                            
+  225/20EA : 9E                         		subb	a, r6
+  226/20EB : 22                         		ret
+  227/20EC :                            
+  228/20EC :                            
+  229/20EC :                            ; -----------------------------------------------
+  230/20EC :                            ; Wait for string from UART. When enter (CR) pressed,
+  231/20EC :                            ; return string in rx_buf
+  232/20EC :                            receive_string:
+  233/20EC : 78 30                      		MOV     R0,#rx_buf
+  234/20EE :                            .loop:
+  235/20EE : 31 08                      		CALL    receive_char
+  236/20F0 :                            
+  237/20F0 : B4 0D 02                   		CJNE    A,#'\r', .not_cr            ; out from loop if CR
+  238/20F3 : 80 0B                      		JMP     .cr_got
+  239/20F5 :                            
+  240/20F5 : B4 20 00                   .not_cr:        CJNE    A,#' ',$+3                  ; strip control chars ( < ' ')
+  241/20F8 : 40 F4                      		JC      .loop
+  242/20FA :                            
+  243/20FA : F6                         		MOV     @R0,A                       ; char to buf
+  244/20FB : 08                         		INC     R0
+  245/20FC :                            
+  246/20FC : 11 E2                      		CALL    send_char                   ; echo
+  247/20FE : 80 EE                      		JMP     .loop
+  248/2100 :                            .cr_got:
+  249/2100 : 76 00                      		MOV     @R0,#0                      ; string end marker
+  250/2102 :                            
+  251/2102 : 90 21 36                   		MOV     DPTR,#crlf_text             ; echo CR as CR+LF
+  252/2105 : 11 CF                      		CALL    send_string_code
+  253/2107 :                            
+  254/2107 : 22                         		RET
+  255/2108 :                            
+  256/2108 :                            ; -----------------------------------------------
+  257/2108 :                            ; Wait for char from UART, return in A
+  258/2108 :                            receive_char:
+  259/2108 : 30 98 FD                   		JNB     RI,$                        ; wait for received char
+  260/210B : C2 98                      		CLR     RI
+  261/210D : E5 99                      		MOV     A,SBUF
+  262/210F : 22                         		RET
+  263/2110 :                            
+  264/2110 :                            try_hard:
+  265/2110 : 90 21 39                   	mov	dptr, #harder
+  266/2113 : 11 CF                      	call	send_string_code
+  267/2115 : 01 00                      	jmp	start
+  268/2117 :                            
+  269/2117 : 2A 2A 2A 20 55 41 52 54 20 hello_text:     DB      '*** UART test ***\r\n',0
+      2120 : 74 65 73 74 20 2A 2A 2A 0D
+      2129 : 0A 00                     
+  270/212B : 52 65 63 65 69 76 65 64 3A received_text:  DB      'Received: ',0
+      2134 : 20 00                     
+  271/2136 : 0D 0A 00                   crlf_text:      DB      '\r\n',0
+ AS V1.42 Beta [Bld 254] - Source File rop.asm - Page 6 - 09.02.2025 18:16:50
+
+
+  272/2139 : 54 72 79 69 6E 67 20 68 61 harder:		DB	"Trying harder!", 0
+      2142 : 72 64 65 72 21 00         
+  273/2148 : 44 49 53 4F 42 45 59 5B 61 flag: 		DB	"DISOBEY[are you into bondage?]", 0
+      2151 : 72 65 20 79 6F 75 20 69 6E
+      215A : 74 6F 20 62 6F 6E 64 61 67
+      2163 : 65 3F 5D 00               
+  274/2167 :                            
+  275/2167 :                            
+ AS V1.42 Beta [Bld 254] - Source File rop.asm - Page 7 - 09.02.2025 18:16:50
+
+
+  Symbol Table (* = unused):
+  --------------------------
+
+*AC :                            D6 B |  ACC :                          0E0 D |
+ AR0 :                            0 - | *AR1 :                            1 - |
+*AR2 :                            2 - | *AR3 :                            3 - |
+*AR4 :                            4 - | *AR5 :                            5 - |
+ AR6 :                            6 - |  AR7 :                            7 - |
+*ARCHITECTURE :  "x86_64-apple-osx" - | *AUXR :                          8E D |
+ AUXR1 :                        0A2 D | *B :                            0F0 D |
+*BANK0 :                          0 - | *BANK1 :                          1 - |
+*BANK2 :                          2 - | *BANK3 :                          3 - |
+*BIGENDIAN :                      0 - | *BUF_LEN :                       10 - |
+*CASESENSITIVE :                  0 - | *CCAP0H :                       0FA D |
+*CCAP0L :                       0EA D | *CCAP1H :                       0FB D |
+*CCAP1L :                       0EB D | *CCAP2H :                       0FC D |
+*CCAP2L :                       0EC D | *CCAP3H :                       0FD D |
+*CCAP3L :                       0ED D | *CCAP4H :                       0FE D |
+*CCAP4L :                       0EE D | *CCAPM0 :                       0DA D |
+*CCAPM1 :                       0DB D | *CCAPM2 :                       0DC D |
+*CCAPM3 :                       0DD D | *CCAPM4 :                       0DE D |
+*CCF0 :                          D8 B | *CCF1 :                          D9 B |
+*CCF2 :                          DA B | *CCF3 :                          DB B |
+*CCF4 :                          DC B |  CCON :                         0D8 D |
+*CF :                            DF B | *CH :                           0F9 D |
+*CL :                           0E9 D | *CMOD :                         0D9 D |
+*CONSTPI :        3.141592653589793 - | *CPRL2 :                         C8 B |
+*CR :                            DE B |  CRLF_TEXT :                   2136 C |
+*CT2 :                           C9 B | *CY :                            D7 B |
+*DATE :                "09.02.2025" - | *DPH :                           83 D |
+*DPL :                           82 D | *EA :                            AF B |
+*EC :                            AE B | *ES :                            AC B |
+*ET0 :                           A9 B | *ET1 :                           AB B |
+*ET2 :                           AD B | *EX0 :                           A8 B |
+*EX1 :                           AA B | *EXEN2 :                         CB B |
+*EXF2 :                          CE B | *F0 :                            D5 B |
+*FALSE :                          0 - |  FLAG :                        2148 C |
+*FULLPMMU :                       1 - | *GIMME :                         16 C |
+ HARDER :                      2139 C | *HAS64 :                          1 - |
+*HASFPU :                         0 - | *HASPMMU :                        0 - |
+*HELLO_TEXT :                  2117 C |  IE :                           0A8 D |
+*IE0 :                           89 B | *IE1 :                           8B B |
+*INSRCMODE :                      0 - | *INSUPMODE :                      0 - |
+*INT0 :                          B2 B | *INT1 :                          B3 B |
+ IP :                           0B8 D | *IPH :                          0B7 D |
+*IT0 :                           88 B | *IT1 :                           8A B |
+ LCD_CMD :                     6020 - |  LCD_DATA :                    6021 - |
+ LCD_DELAY :                   20BD C |  LCD_DELAY_LONG :              20C6 C |
+ LCD_GLYPH :                   20A3 C |  LCD_PRINT :                   208D C |
+ LCD_PRINT.END :               20A2 C |  LCD_PRINT.LCD_LOOP :          2094 C |
+ LCD_PRINT_IDATA :             205A C |  LCD_PRINT_IDATA.END :         2066 C |
+ LCD_PRINT_IDATA.LCD_LOOP :    205D C |  LCD_SETUP_GLYPH :             2034 C |
+ LCD_SETUP_GLYPH.LOOP :        2045 C |  LCD_STRING :                  20AB C |
+*LISTON :                         1 - | *MACEXP :                         7 - |
+*MOMCPU :                      8051 - | *MOMCPUNAME :                "8051" - |
+*NESTMAX :                      100 - | *OV :                            D2 B |
+*P :                             D0 B | *P0 :                            80 D |
+*P1 :                            90 D | *P2 :                           0A0 D |
+ P3 :                           0B0 D | *P80C51FAINC :                    1 - |
+*PADDING :                        1 - |  PAULMON2 :                       0 - |
+ AS V1.42 Beta [Bld 254] - Source File rop.asm - Page 8 - 09.02.2025 18:16:50
+
+
+*PCON :                          87 D | *PM.CIN :                        3A - |
+*PM.COUT :                       38 - | *PM.PHEX :                       3C - |
+*PM.PHEX1 :                      36 - | *PM.PHEX16 :                     3E - |
+*PPC :                           BE B | *PRINT_FLAG :                  2067 C |
+*PS :                            BC B |  PSW :                          0D0 D |
+*PT0 :                           B9 B | *PT1 :                           BB B |
+*PT2 :                           BD B | *PX0 :                           B8 B |
+*PX1 :                           BA B | *RB8 :                           9A B |
+ RCAP2H :                       0CB D |  RCAP2L :                       0CA D |
+*RCLK :                          CD B | *RD :                            B7 B |
+*RECEIVED_TEXT :               212B C |  RECEIVE_CHAR :                2108 C |
+ RECEIVE_STRING :              20EC C |  RECEIVE_STRING.CR_GOT :       2100 C |
+ RECEIVE_STRING.LOOP :         20EE C |  RECEIVE_STRING.NOT_CR :       20F5 C |
+*REGUSAGE :                       1 - | *RELAXED :                        0 - |
+*REN :                           9C B |  RI :                            98 B |
+*RS0 :                           D3 B | *RS1 :                           D4 B |
+*RXD :                           B0 B |  RX_BUF :                        30 - |
+*SADDR :                        0A9 D | *SADEN :                        0B9 D |
+ SBUF :                          99 D |  SCON :                          98 D |
+ SEND_CHAR :                   20E2 C |  SEND_STRING_CODE :            20CF C |
+ SEND_STRING_CODE.DONE :       20D8 C |  SEND_STRING_IDATA :           20D9 C |
+ SEND_STRING_IDATA.DONE :      20E1 C | *SM0 :                           9F B |
+*SM1 :                           9E B | *SM2 :                           9D B |
+ SP :                            81 D |  STACK :                         40 - |
+ START :                       2000 C |  START.RECEIVE_LOOP :          2024 C |
+*T0 :                            B4 B | *T1 :                            B5 B |
+ T2CON :                        0C8 D | *T2MOD :                        0C9 D |
+ T2_RELOAD :                  0FFF3 - | *TB8 :                           9B B |
+*TCLK :                          CC B |  TCON :                          88 D |
+*TF0 :                           8D B | *TF1 :                           8F B |
+*TF2 :                           CF B | *TH0 :                           8C D |
+*TH1 :                           8D D | *TH2 :                          0CD D |
+ TI :                            99 B | *TIME :                  "18:16:50" - |
+*TL0 :                           8A D | *TL1 :                           8B D |
+*TL2 :                          0CC D | *TMOD :                          89 D |
+*TR0 :                           8C B | *TR1 :                           8E B |
+*TR2 :                           CA B | *TRUE :                           1 - |
+*TRY_HARD :                    2110 C | *TXD :                           B1 B |
+*VERSION :                     142F - | *WR :                            B6 B |
+ __BACK0 :                     20C8 C |  __FORW0 :                     2070 C |
+ __FORW1 :                     2073 C |  __FORW2 :                     2079 C |
+ __FORW3 :                     207C C |  __FORW4 :                     2082 C |
+ __FORW5 :                     2085 C |
+
+    199 symbols
+    140 unused symbols
+
+ AS V1.42 Beta [Bld 254] - Source File rop.asm - Page 9 - 09.02.2025 18:16:50
+
+
+  Defined Macros:
+  ---------------
+
+USING                                 |
+
+      1 macro
+
+ AS V1.42 Beta [Bld 254] - Source File rop.asm - Page 10 - 09.02.2025 18:16:50
+
+
+  Code Pages:
+  ----------
+
+STANDARD (0 changed characters)
+
+1 code page
+
+0.01 seconds assembly time
+
+    485 lines source file
+    503 lines incl. macro expansions
+      3 passes
+      0 errors
+      0 warnings

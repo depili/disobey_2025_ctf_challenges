@@ -1,0 +1,213 @@
+;::::::::::::::::::::::::::::::::::::::::::::::::**************************
+; Hard disk routines as implemented for		 **  Hardware Dependent  **
+; Retro-Brew Hardware with HBIOS.		 ** for exact interface  **
+; Uses HBIOS disk routines for all HD access	 **************************
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+; This file uses modifications of the definitions in ICFG-xx to reflect
+; Physical and/or logical definitions for HBIOS drives.  A controller type of
+; 8xH signifies IDE/ATA drives, in which case the Drive byte at HDRVx is:
+;	7 6 5 4 3 2 1 0
+;	| | | | | +-+-+- Unit Number (0-7)
+;	| | | | +-------  (reserved)
+;	| | | +--------- 1 = Active, 0 = Inactive
+;	+-+-+-----------  (reserved)
+; Additionally, the first byte of the Reduced Write Cylinder word is re-
+; defined to be the number of physical/logical Sectors-Per-Track.
+; Uses HBIOS disk routines for all HD access.  Direct BIOS disk access
+; in not implemented.
+;   These parameters are used to convert the Track & 16 Sector/Track format
+; assumed in the B/P Bios definitions for Hard Drives into Track/Sector/Head
+; Sector Number needed for HBIOS Disk accesses.  Direct driver IO routines
+; to Select (SELHD), Read (HDREAD) and Write (HDWRIT) are all included here.
+;--------------------------------------------------------------------------
+; 1.8 - 06 Feb 20 - Updated for HBIOS version 2.9.2			WW
+; 1.7 - 28 Nov 16 - Updated for HBIOS version 2.8			WW
+; 1.6 - 20 Jan 14 - Initial N8VEM test release				WW+LWN
+; 1.5 - 31 May 12 - Added ability to handle two IDE devices		LN
+; 1.4 - 12 Dec 07 - Initial Test LabZ80 Release				LN
+; 1.3 - 26 Aug 01 - Cleaned up source and included fixes from SCSI.	HFB
+; 1.2 - 15 Sep 97 - Corrected Data saves for Direct Device IO when
+;		flushing to/from other SCSI units, added Busy tests.	HFB
+; 1.1 - 28 Jun 97 - Added Home Drive, Retry Disable bit handling.	HFB
+; 1.0 - 17 Jul 96 - Initial P112 integration, deleted Xebec 1410/Shugart
+;		1610-3 driver, selectable Polled/DMA modes.		HFB
+; 0.1 - 28 May 93 - Fixed Access to fast drives.			JTH
+; 0.0 -  9 Jul 91 - Initial Test Release				HFB
+;***************************************************************************
+
+	  IF  BANKED
+	COMMON	/BANK2/
+	  ELSE
+	CSEG
+	  ENDIF
+
+;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+; Function 0 - Set User Data Area Address for Direct Disk IO, Return
+;		Number of Bytes in the driver Command Block (SCSI-"like")
+;   For IDE, a minimum of 6 Bytes is needed (Comnd,Trk(2),Sctr,Head,Drive)
+;	***** direct disk IO no longer supported - so this function is not
+;	implemented *****
+; Enter: DE = Address of User Data Area
+; Exit :  A = Number of bytes available in the Command Block
+; Uses : A,HL
+;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+HDVALS:	CALL	PANIC		; NOT IMPLEMENTED!!!!
+	RET
+
+;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+; Function 1 - Set Unit # and dev/unit in Command Block from A - return
+;		unit # in A
+; Enter:  A = Drive Byte
+; Exit :  A = Unit # 
+; Uses : AF
+;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+HDSLCT:	CALL	PANIC		; NOT IMPLEMENTED!!!!
+	RET
+
+;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+; Function 2 - Direct SCSI driver.  This routine performs the function
+;  described by the command in the HD Command Block with Data area
+;  addressed by DE.  At the end of the function, 512 bytes of data are
+;  transferred from the Bios IO Buffer to the Users Space set by Fcn 0.
+;
+; Enter: DE = Pointer to User Command Descriptor Block
+;		HDCOMD contains pre-filled SCSI Command Block
+;	  A = 0 if No Data to be Written, FF if User-supplied data to write
+; Exit :  H = Message Byte value
+;	  L = Status Byte value
+;	  A = Status byte, Flags set accordingly.
+; Uses : AF,BC,DE,HL
+; NOTE : Routine assumes the Command Block is properly configured for the
+;	desired function and device.  Errors in phasing result in program
+;	exit and Warm Boot function, while Timeout returns 0FFH.
+; For external access, It assumes the user has used Functions 0 and 1 to
+; set the data transfer source/dest address and logical & physical drive.
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+HD_RW:	CALL	PANIC		; NOT IMPLEMENTED!!!!
+	RET
+
+;========================================================================
+; Select Hard Disk (Unit 0/1, Master/Slave)	< Internal Bios routine >
+
+SELHD:	; SET DEVICE
+
+;	CALL	PRTSTRD
+;	DEFB	'[SELHD]$'
+
+	JP	SETPARMS	;   then set parameters for DPH/DPB
+
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+; Write to Hard Disk Drive			< Internal BIOS Routine >
+;  Writes from HSTBUF using HSTTRK and HSTSEC to build Block Number.
+; NOTE: This routine uses physical drive characteristics from ICFG-xx.
+
+HDWRIT:
+;	CALL	PRTSTRD
+;	DEFB	'[HD WRITE]$'
+
+	XOR	A
+	LD	(HSTWRT),A	; Show no active writes pending
+
+	LD	B,HB_DIOWRITE	; HBIOS WRITE
+	JR	HDIO	; ..continue
+
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+; Read from Hard Disk Drive			< Internal BIOS Routine >
+;  Reads to HSTBUF using HSTTRK and HSTSEC to build Block Number.
+
+HDREAD:
+;	CALL	PRTSTRD		; DEBUG
+;	DEFB	'[HD READ]$'	; DEBUG
+
+	LD	B,HB_DIOREAD	; HBIOS READ
+	JR	HDIO	; ..continue
+
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+; Common read/write code for hard disk
+
+HDIO:
+	LD	HL,(HSTDPH)	; GET ACTIVE DPH POINTER
+	DEC	HL		; ADJUST TO POINT TO BPBIOS LOGICAL UNIT NUMBER
+	LD	A,(HL)		; LOAD IT IN A
+;
+	; Convert logical -> physical
+	; Code below is ugly brute force approach, but since there are
+	; always exactly 3 logical drives in BPBIOS and the first one
+	; is the most commonly used, this turns out to be reasonably
+	; efficient.
+	LD	HL,HDRV0	; PERHAPS HDRV0
+	OR	A		; A == 0?
+	JR	Z,HDSK_HDIO1	; HANDLE IF SO
+	LD	HL,HDRV1	; PERHAPS HDRV1
+	DEC	A		; A == 1?
+	JR	Z,HDSK_HDIO1	; HANDLE IF SO
+	LD	HL,HDRV2	; PERHAPS HDRV2
+	DEC	A		; A == 2?
+	JR	Z,HDSK_HDIO1	; HANDLE IF SO
+	CALL	PANIC		; INVALID LOGICAL UNIT NUMBER
+HDSK_HDIO1:
+	LD	A,(HL)		; LOAD PHYS UNIT NUM (HBIOS DISK UNIT)
+	AND	0FH		; REMOVE EXTRANEOUS BITS
+	LD	C,A		; PUT IN C FOR BELOW
+	JR	HB_DSKIO
+
+	  IF  BANKED
+	COMMON	/BANK2/
+	  ELSE
+	CSEG
+	  ENDIF
+;
+;==================================================================================================
+;   HBIOS Disk Driver Interface
+;==================================================================================================
+;
+; Enter with B=HBIOS disk function code (read/write)
+;            C=HBIOS disk unit number
+;
+; NOTE: This routine uses physical drive characteristics from ICFG-xx.
+; The routine computes a sequential block number with the algorithm; 
+; Trk * 16 + Sector, HBIOS uses LBA addressing for hard drive like 
+; devices i.e. everything but floppies. The Track contains the most
+; significant 16 bits, Head the next byte and Sector the least 
+; significant byte. Note, only 16 bits are needed to address 33 
+; megabytes for now 24 bits will be used for the LBA address.  For non-
+; hard drive like devices, Head, Sector and Track can be computed
+; using Physical characteristics (hdHds = Number_of_Heads,
+; hdSPT = Sectors_per_Track) according to the algorithm:
+;
+;   Sector := (Block# MOD hdSPT)+1	(* Quotient1 := Block# DIV hdSPT *)
+;   Head   := Quotient1 MOD hdHds	(* Quotient2 := Quotient1 DIV hdHds *)
+;   Track  := Quotient2
+
+HB_DSKIO:
+	PUSH	BC		; SAVE FUNCTION AND DEVICE FOR LATER
+	LD	HL,(HSTTRK)	; GET TRACK VALUE
+	LD	A,L		; LSB OF TRACK TO A
+	AND	0FH		; ISOLATE HEAD IN LOW 4 BITS
+	LD	D,A		; STUFF IT IN D
+	LD	A,(HSTSEC)	; GET SECTOR
+	LD	E,A		; STUFF IT IN E
+	LD	B,4		; PREPARE TO SHIFT OUT 4 BIT HEAD VALUE
+HB_DSKIO1:                       
+	SRL	H		; SHIFT ONE BIT OUT
+	RR	L		; ... OF HL
+	DJNZ	HB_DSKIO1	; DO ALL 4 BITS
+	POP	BC		; RECOVER FUNCTION AND DEVICE
+	PUSH	BC		; SAVE INCOMING FUNCTION, DEVICE/UNIT
+	LD	B,12H		; SETUP FOR NEW SEEK CALL
+	CALL	HBX_INVOKE	; DO IT
+	POP	BC              ; RESTORE INCOMING FUNCTION, DEVICE/UNIT
+	RET	NZ              ; ABORT IF SEEK RETURNED AN ERROR W/ ERROR IN A
+	LD	HL,(HB_DSKBUF)  ; GET BUFFER ADDRESS
+	LD	A,(HB_BNKBIOS)	; BUFFER IN HBIOS BANK
+	LD	D,A		; PUT IN D
+	LD	E,1		; ONE SECTOR
+	CALL	HBX_INVOKE	; DO IT
+	OR	A		; SET FLAGS
+	RET	Z		; DONE IF NO ERROR
+
+	OR	0FFH		; A=$FF TO SIGNAL ERROR
+	RET			; AND DONE W/ ERROR

@@ -1,0 +1,154 @@
+;:::::::::::::::::::::::::::::::::::::::*****************************
+;   HBIOS - HBios Interface Routines	***** Hardware-Specific *****
+;					*****************************
+;	- Retro Brew -
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+;
+; HBIOS Functions
+;
+HBF_ALLOC	EQU	0F6H		; HBIOS Func: ALLOCATE Heap Memory
+HBF_PEEK	EQU	0FAH		; HBIOS Func: Peek Byte
+HBF_POKE	EQU	0FBH		; HBIOS Func: Poke Byte
+HBF_SYSRES_INT	EQU	0F000H		; HBIOS Func: Internal Reset
+HBF_MEMINFO	EQU	0F8F1H		; HBIOS Func: Get Memory Info
+HBF_BNKINFO	EQU	0F8F2H		; HBIOS Func: Get Bank Info
+;
+; HBIOS Proxy Addresses
+;
+HBX_INVOKE	EQU	0FFF0H
+HBX_BNKSEL	EQU	0FFF3H
+HBX_BNKCPY	EQU	0FFF6H
+HBX_BNKCALL	EQU	0FFF9H
+
+HBX_CURBNK	EQU	0FFE0H
+HBX_INVBNK	EQU	0FFE1H
+HBX_SRCADR	EQU	0FFE2H
+HBX_SRCBNK	EQU	0FFE4H
+HBX_DSTADR	EQU	0FFE5H
+HBX_DSTBNK	EQU	0FFE7H
+HBX_CPYLEN	EQU	0FFE8H
+;
+; HBIOS disk commands
+;
+HB_DIOREAD	EQU	13H
+HB_DIOWRITE	EQU	14H
+
+	CSEG
+
+
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+;	Trap initial SELMEM call and fixup HBIOS bank ids.
+;  A = Bank
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+; LDSYS calls the SELMEM entry point of BIOSJT in order to
+; place memory contents in SYSBNK.  It does this prior to
+; calling CBOOT to start the system.  Since we need to adjust
+; the bank numbers on-the-fly at startup to adjust for
+; HBIOS actual RAM size, we intercept the initial HB_SELMEM
+; call here, make required changes, then update the
+; BIOSJT to point directly to the normal SELMEM routine for
+; all subsequent calls.
+;
+; When called, the incoming bank id will be the original hard-coded
+; bank id prior to any adjustments.  These original bank id's are
+; coded to be an offset from the ending HBIOS RAM bank id which
+; is (80h + RAM banks).  See romwbw.lib.  We update the requested
+; bank id for this initial call to make it the proper absolute
+; HBIOS bank id.
+;
+; See romwbw.lib for additional RAM bank layout information.
+
+HB_SELMEM:
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	
+	PUSH	AF		; Save incoming bank request
+	
+	  IF HB_DEBUG AND FALSE
+	CALL	PRTSTRD
+	DEFB	'[HB_SELMEM: $'
+	CALL	PRTHEXBYTE
+	CALL	PRTSTRD
+	DEFB	']',CR,LF,'$'
+	  ENDIF
+	
+	LD	BC,HBF_BNKINFO	; HBIOS BNKINFO function
+	CALL	HBX_INVOKE	; Do it, D=BIOS bank, E=USER (TPA) bank
+	LD	A,D		; BIOS bank
+	LD	(HB_BNKBIOS),A	; Save it for later (deblock & hard-ww)
+	LD	A,E		; USER (TPA) bank
+	LD	(TPABNK),A	; Update BP register
+	DEC	A		; SYS bank is one below USER
+	LD	(SYSBNK),A	; Update BP register
+	DEC	A		; HBIOS BUF bank is one more below
+	;LD	(UABNK),A	; Set BPBIOS USER bank
+	LD	(RAMBNK),A	; Update BP RAM disk bank register
+	LD	(MAXBNK),A	; Update ending bank register
+	
+	LD	HL,SELMEM	; Future SELMEM calls will
+	LD	(BIOSJT+(27*3)+1),HL	; ... go to real SELMEM
+	
+	POP	BC		; Recover requested bank to B
+	LD	A,(TPABNK)	; Get TPA bank
+	ADD	2		; Offset to ending RAM bank id
+	ADD	B		; Adjust for incoming request
+	
+	POP	HL
+	POP	DE
+	POP	BC
+	JP	SELMEM		; Continue to normal SELMEM
+	
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+; Move Data - Possibly between banks.  This resembles CP/M 3, but
+;  usage of the HL and DE registers is reversed.
+; Enter: HL = Source Address
+;	 DE = Destination Address
+;	 BC = Number of bytes to move
+; Exit : None
+; Uses : AF,BC,DE,HL
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+HB_MOVE:
+	LD	A,(HB_SRCBNK)
+	LD	(HBX_SRCBNK),A
+	LD	A,(HB_DSTBNK)
+	LD	(HBX_DSTBNK),A
+	CALL	HBX_BNKCPY
+	PUSH	HL
+	LD	HL,(TPABNK)	; Get TPA Bank #
+	LD	H,L		; .to both H and L
+	LD	(HB_SRCBNK),HL	; ..set Source & Destination Bank # to TPA
+	POP	HL
+	RET
+
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+;	Set Banks for Inter-Bank Xfer.  Save all Registers.
+;  B = Destination Bank, C = Source Bank
+;::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+HB_XMOVE:
+	  IF HB_DEBUG AND FALSE
+	CALL	PRTSTRD
+	DEFB	'[HB_XMOVE: $'
+	CALL	PRTHEXWORD
+	CALL	PRTSTRD
+	DEFB	']',CR,LF,'$'
+	  ENDIF
+
+	LD	(HB_SRCBNK),BC
+	RET
+
+;
+;==================================================================================================
+;   HBIOS INITIALIZATION
+;==================================================================================================
+;
+	CSEG
+
+HB_SRCBNK:	DEFS	1	; Move Source Bank #
+HB_DSTBNK:	DEFS	1	; Move Destination Bank #
+HB_BNKBIOS:	DEFS	1	; Bank id of HBIOS bank
+HB_DSKBUF:	DEFS	2	; Address of physical disk buffer in HBIOS bank
+

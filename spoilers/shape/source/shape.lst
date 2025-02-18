@@ -1,0 +1,417 @@
+
+
+
+      *100                                                                Page 1
+
+
+    1        0100  *100
+    2 00100  0420  FLAG,   420
+    3 00101  0444          444
+    4 00102  0514          514
+    5 00103  0474          474
+    6 00104  0410          410
+    7 00105  0424          424
+    8 00106  0544          544
+    9 00107  0554          554
+   10 00110  0720          720
+   11 00111  0640          640
+   12 00112  0624          624
+   13 00113  0200          200
+   14 00114  0700          700
+   15 00115  0620          620
+   16 00116  0700          700
+   17 00117  0264          264
+   18 00120  0340          340
+   19 00121  0200          200
+   20 00122  0660          660
+   21 00123  0644          644
+   22 00124  0730          730
+   23 00125  0624          624
+   24 00126  0714          714
+   25 00127  0204          204
+   26 00130  0564          564
+   27 00131  0000          0
+   28 00132  6250  KEY,    -1530   / k
+   29 00133  6270          -1510   / i
+   30 00134  6150          -1630   / s
+   31 00135  6150          -1630   / s
+   32 00136  6370          -1410   / a
+   33 00137  7160          -0620   / 2
+   34              
+   35        0200  *200
+   36 00200  6046  START,  TLS
+   37 00201  4777@         JMS     TYPX
+   38 00202  0254          MESG1
+   39 00203  4776@         JMS     KREAD
+   40 00204  0273          INAREA
+   41 00205  7760          -20
+   42              
+   43 00206  7300  PW,     CLA CLL
+   44 00207  1271          TAD     TKM6
+   45 00210  3272          DCA     KEYL
+   46 00211  1375          TAD     (INAREA-1)
+   47 00212  3010          DCA     10
+   48 00213  1374          TAD     (KEY-1)
+   49 00214  3011          DCA     11
+   50              
+
+
+
+      *100                                                                Page 2
+
+
+   51 00215  7300  KEY1,   CLA CLL
+   52 00216  1410          TAD I   10
+   53 00217  0773@         AND     TK177
+   54 00220  7450          SNA
+   55 00221  5232          JMP     WRONG
+   56 00222  7006          RTL
+   57 00223  7004          RAL
+   58 00224  1411          TAD I   11
+   59 00225  7440          SZA
+   60 00226  5232          JMP     WRONG   / Wrong PW
+   61 00227  2272          ISZ     KEYL
+   62 00230  5215          JMP     KEY1
+   63 00231  5236          JMP     DONE
+   64              
+   65 00232  4777@ WRONG,  JMS     TYPX
+   66 00233  0265          MESG4
+   67 00234  7402          HLT
+   68 00235  5200          JMP     START
+   69              
+   70              
+   71 00236  4777@ DONE,   JMS     TYPX
+   72 00237  0262          MESG3
+   73 00240  7300          CLA CLL
+   74 00241  1372          TAD     (FLAG-1)
+   75 00242  3010          DCA     10
+   76 00243  7300  FL,     CLA CLL
+   77 00244  1410          TAD I   10
+   78 00245  7450          SNA
+   79 00246  5252          JMP     END
+   80 00247  7012          RTR
+   81 00250  4771@         JMS     TLSX
+   82 00251  5243          JMP     FL
+   83 00252  7402  END,    HLT
+   84 00253  5200          JMP     START
+   85              
+   86 00254  3720  MESG1,  TEXT /PASSWORD:/
+      00255  0123
+      00256  2327
+      00257  1722
+      00260  0472
+      00261  3700
+   87 00262  3717  MESG3,  TEXT /OK/
+      00263  1337
+      00264  0000
+   88 00265  3706  MESG4,  TEXT /FAIL/
+      00266  0111
+      00267  1437
+      00270  0000
+   89 00271  7772  TKM6,   -6
+   90 00272  7772  KEYL,   -6
+
+
+
+      *100                                                                Page 3
+
+
+   91 00273  0000  INAREA, 0
+   92              
+   93              
+   94              / BASIC TELETYPE I/O SUBROUTINES
+   95              / REVISION: 18-JAN-71
+   96              
+   97              / COPYRIGHT 1971        DIGITAL EQUIPMENT CORPORATION
+   98              /                       MAYNARD, MASSACHUSETTS 01754
+   99              
+  100              / Written and formatted from scanned manual by
+  101              / Vesa-Pekka Palmu, 2025
+  102              
+  103              / These subroutines illustrate typical methods of using the
+  104              / standard teletype to input and output alphanumeric data
+  105              / on a pdp-8 family computer.
+  106              
+  107              /          --NOTES--
+  108              / (1) the user program must initialize the teleprinter flag
+  109              / before calling these subroutines.
+  110              /
+  111              / (2) these routines may only be called from the field in
+  112              /  which they reside.
+  113              
+  114              / Origin to new page
+  115              
+  116        0273  *.-1 177+1              / ((Current address -1) OR 177) + 1
+      00273  0200
+      00371  0445
+      00372  0077
+      00373  0444
+      00374  0131
+      00375  0272
+      00376  0461
+      00377  0400
+  117        0400  *400
+  118              
+  119              / Subroutine to type messages.
+  120              / this subroutine prints a message to be stored in stripped
+  121              / six bit ascii, two characters per word. this format
+  122              / can be easily generated by using the "TEXT" pseudo-op in
+  123              / programs assembled by PALD, PAL8, or MACRO-8.
+  124              
+  125              / Entry,        JMS TYPX
+  126              /               POINTER         (Address of message)
+  127              / Exit is to entry+2 with the AC clear.
+  128              
+  129              /          --NOTE--
+  130              / The following characters have special meanings:
+  131              /
+  132              / Value character       comments
+
+
+
+      *100                                                                Page 4
+
+
+  133              / 00    0               marks end of message, the Text
+  134              /                       pseudo-op inserts this character.
+  135              / 37    \r              causes a carriage return/line feed
+  136              /                       to be output.
+  137              
+  138 00400  0000  TYPX,   0
+  139 00401  7300          CLA CLL
+  140 00402  1600          TAD I   TYPX    / Get pointer
+  141 00403  3216          DCA     TYPNT   / And save it locally
+  142 00404  2200          ISZ     TYPX    / Return address
+  143 00405  1616  TYPX1,  TAD I   TYPNT   / Get left hand character
+  144 00406  7012          RTR             / This can be changed to a byte swap on the pdp-8e!
+  145 00407  7012          RTR
+  146 00410  7012          RTR
+  147 00411  4217          JMS     TYPY    / Convert and type
+  148 00412  1616          TAD I   TYPNT   / Get right hand character
+  149 00413  2216          ISZ     TYPNT   / move pointer to next word
+  150 00414  4217          JMS     TYPY    / Convert and type
+  151 00415  5205          JMP     TYPX1
+  152 00416  0000  TYPNT,  0               / Pointer to string
+  153              
+  154              / This subroutine is called by "typx" (and "krbx"!)--
+  155              / Enter with the character to type in AC6-11:
+  156              /       (1) tests for terminator (00)
+  157              /       (2) tests for CR-LF (37) character
+  158              /       (3) converts character to 8-bit ascii and types it
+  159 00417  0000  TYPY,   0
+  160 00420  0236          AND     TK77    / Mask off character
+  161 00421  7450          SNA             / Test for terminator
+  162 00422  5600          JMP I   TYPX    / Exit if terminator
+  163 00423  1237          TAD     TKM37
+  164 00424  7440          SZA             / Test for CR-LF
+  165 00425  5231          JMP     TYPY1   / Not a 37
+  166 00426  1240          TAD     TK215   / Type a -CR-
+  167 00427  4245          JMS     TLSX
+  168 00430  1241          TAD     TKM125  / Converts to a -LF- 212
+  169              
+  170 00431  7510  TYPY1,  SPA             / Test range
+  171 00432  1242          TAD     TK100   / Range is 301-336
+  172 00433  1243          TAD     TK237   / Range is 240-277
+  173 00434  4245          JMS     TLSX    / Type character
+  174 00435  5617          JMP I   TYPY
+  175              
+  176 00436  0077  TK77,   77              / Mask for AC6-11
+  177 00437  7741  TKM37,  -37             / Test for CR-LF character
+  178 00440  0215  TK215,  215             / ASCII value of -CR-
+  179 00441  7653  TKM125, -125            / This plus 337 = 212 -LF-
+  180 00442  0100  TK100,  100             / Convert to range 301-336
+  181 00443  0237  TK237,  237             / Covert to range 240-277
+  182 00444  0177  TK177,  177
+
+
+
+      *100                                                                Page 5
+
+
+  183              
+  184              / Teletype output subroutine.
+  185              / Enter with character in the AC.
+  186              /     --NOTE--
+  187              / The teletype flag must be initialized
+  188              / before calling this routine!
+  189              
+  190 00445  0000  TLSX,   0
+  191 00446  0244          AND     TK177
+  192 00447  6041          TSF
+  193 00450  5247          JMP     .-1     / Wait for teletype ready
+  194 00451  6046          TLS
+  195 00452  7200          CLA
+  196 00453  5645          JMP I   TLSX
+  197              
+  198              / Teletype input subroutine.
+  199              / Exit with character read in the AC.
+  200 00454  0000  KRBX,   0
+  201 00455  6031          KSF
+  202 00456  5255          JMP     .-1     / Wait for character
+  203 00457  6036          KRB
+  204 00460  5654          JMP I   KRBX
+  205              
+  206              / Teletype input subroutine.
+  207              / This subroutine demonstrates how to input
+  208              / alphanumeric characters from the teletype. It reads
+  209              / the characters into a buffer, echoes characters typed,
+  210              / and performs minor editing:
+  211              /       (1) Characters null (200 and 000) and line feed
+  212              /       are deleted on input.
+  213              /       (2) Character rubout (377) deletes the previous
+  214              /       character typed. It echoes as a backslash followed
+  215              /       by the character deleted (multiple rubouts do not
+  216              /       echo backslash after the first: a non-rubout char-
+  217              /       acter causes a "closing" backslash to be printed).
+  218              / The character carriage return terminates input. It
+  219              / echoes as a carriage return followed by a line feed.
+  220              
+  221              / Entry,        JMS     KREAD
+  222              /               POINTER         (Address of input buffer)
+  223              /               -LENGTH         (Minus size of input buffer)
+  224              / Exit is entry+2; on exit:
+  225              /       (1) AC is clear.
+  226              /       (2) A terminating word of zero is placed in the
+  227              /       input buffer (the carriage return is not enterred
+  228              /       in the buffer).
+  229              
+  230              /     --NOTE--
+  231              / On buffer overflow, characters will be echoed as "bell"
+  232              / to inform user that buffer is full. All characters,
+
+
+
+      *100                                                                Page 6
+
+
+  233              / other than carriage return and rubout, are lost.
+  234              
+  235              / This routine is written to co-reside with the teletype
+  236              / output subroutines "TYPY" and "TLSX".
+  237              
+  238 00461  0000  KREAD,  0
+  239 00462  7300          CLA CLL
+  240 00463  1661          TAD I   KREAD   / Get address of buffer
+  241 00464  2261          ISZ     KREAD
+  242 00465  3216          DCA     KRPNT   / Set up pointer
+  243 00466  1661          TAD I   KREAD   / Get size of buffer
+  244 00467  3200          DCA     KRCNT   / Set up counter
+  245 00470  4254  KRB1,   JMS     KRBX    / Get character
+  246 00471  3616          DCA I   KRPNT   / Save character
+  247 00472  1362          TAD     KRTAB   / Load pointer to table
+  248 00473  3347          DCA     KRBKS   / Into temp. storate
+  249              
+  250              / Enter scanning loop.
+  251 00474  1616  KRB3,   TAD I   KRPNT   / Add in current character
+  252 00475  2347          ISZ     KRBKS   / Advance index to jmp word
+  253 00476  7650          SNA CLA
+  254 00477  5747          JMP I   KRBKS   / Call special routine
+  255 00500  2347          ISZ     KRBKS   / Go on next entry
+  256 00501  1747          TAD I   KRBKS   / Get table entry
+  257 00502  7440          SZA             / Zero marks end of table
+  258 00503  5274          JMP     KRB3    / Continue scan
+  259              
+  260              / Normal character routine--
+  261              / Check for buffer overflow, echo character, and
+  262              / return to fetch next character.
+  263 00504  4347          JMS     KRBKS   / Echo backslash if needed
+  264 00505  2200          ISZ     KRCNT   / Test for buffer overflow
+  265 00506  5314          JMP     KRB6    / Normal route
+  266              / Buffer overflow!
+  267 00507  1360          TAD     TK207   / Echo "BELL"
+  268 00510  4245  KRB5,   JMS     TLSX
+  269 00511  7240          CLA CMA         / Decrement char counter
+  270 00512  1200          TAD     KRCNT
+  271 00513  5267          JMP     KRB1-1  / Return to get next char
+  272 00514  1616  KRB6,   TAD I   KRPNT   / Get character
+  273 00515  2216          ISZ     KRPNT   / Advance buffer pointer
+  274 00516  4245          JMS     TLSX    / Echo character
+  275 00517  5270          JMP     KRB1    / Return to get next char
+  276              
+  277              / Rubout routine--
+  278              / This routine is called when a rubout is typed: It deletes
+  279              / the last character in the vuffer, reset the pointer,
+  280              / and does some fancy echoing.
+  281 00520  7240  KRUB,   CLA CMA         / Reverse rubout flag test
+  282 00521  4347          JMS     KRBKS   / Echo backslash if needed
+
+
+
+      *100                                                                Page 7
+
+
+  283 00522  2357          ISZ     KRFLAG  / Set rubout flag
+  284 00523  1661          TAD I   KREAD   / Check for empty buffer
+  285 00524  7041          CIA
+  286 00525  1200          TAD     KRCNT   / By comparing counters
+  287 00526  7650          SNA CLA
+  288 00527  5335          JMP     KRUB1   / No rubout pas beginning
+  289 00530  7240          CLA CMA
+  290 00531  1216          TAD     KRPNT   / Decrement buffer pointer
+  291 00532  3216          DCA     KRPNT
+  292 00533  1616          TAD I   KRPNT   / Get character to echo
+  293 00534  5310          JMP     KRB5
+  294              
+  295              / Echo CR-LF-backslash on attempt to rubout past the start
+  296              / of the input buffer.
+  297 00535  1243  KRUB1,  TAD     TK237   / Looks like a "<-"!
+  298 00536  4217          JMS     TYPY    / Forces a CR-LF
+  299 00537  4347          JMS     KRBKS   / Always forces a backslash
+  300 00540  5270          JMP     KRB1
+  301              
+  302              / Carriage return routine--
+  303              / This routine is called when a carriage return is typed;
+  304              / Echoes CR-LR, deposits 0 in input buffer, and exits.
+  305 00541  4347  KRCR,   JMS     KRBKS   / Echo backslash if needed.
+  306 00542  1243          TAD     TK237   / Looks like a "<-"!
+  307 00543  4217          JMS     TYPY    / Forces a CR-LF
+  308 00544  3616          DCA I   KRPNT   / Store zero in buffer
+  309 00545  2261          ISZ     KREAD   / Set to exit address
+  310 00546  5661          JMP I   KREAD   / And exit.
+  311              
+  312              / This subroutine echoes backslash when KRFLAG is non-zero
+  313              / Note-- Location "KRBKS" is also used as temporary
+  314              
+  315 00547  0000  KRBKS,  0
+  316 00550  1357          TAD     KRFLAG  / Get flag
+  317 00551  7640          SZA CLA
+  318 00552  1361          TAD     TK334   / Backslash character
+  319 00553  7440          SZA
+  320 00554  4245          JMS     TLSX    / Type a backslash
+  321 00555  3357          DCA     KRFLAG  / Clear flag
+  322 00556  5747          JMP I   KRBKS   / Exit
+  323              
+  324 00557  0000  KRFLAG, 0               / Set to +1 if a rubout was
+  325                                      / last char, otherwise 0.
+  326              
+  327              / Save a couple locations by using TYPX and TYPNT.
+  328        0416  KRPNT=TYPNT             / Pointer to input buffer
+  329        0400  KRCNT=TYPX              / Minus no. of words left
+  330 00560  0207  TK207,  207             / Bell is ascii 207
+  331 00561  0334  TK334,  334             / Backslash is ascii 334
+  332              
+
+
+
+      *100                                                                Page 8
+
+
+  333              / Special character table--
+  334              / Entries in thsi table are two wores long:
+  335              /       (Word 1)        -Value of character
+  336              /       (Word 2)        JMP to proper routine
+  337              / The table is terminated by an entry of 0.
+  338 00562  0562  KRTAB,  .
+  339 00563  5270          JMP     KRB1    / Null -- ignore
+  340 00564  7600          -200
+  341 00565  5270          JMP     KRB1    / Null -- ignore
+  342 00566  7566          -212
+  343 00567  5270          JMP     KRB1    / Line feed -- ignore
+  344 00570  7563          -215
+  345 00571  5341          JMP     KRCR    / Carriage return -- exit
+  346 00572  7401          -377
+  347 00573  5320          JMP     KRUB    / Rubout -- delete character
+  348 00574  0000          0               / Denotes end of table.
+  349              $
+      No detected errors
+      6 links generated

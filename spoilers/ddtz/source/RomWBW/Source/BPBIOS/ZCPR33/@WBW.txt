@@ -1,0 +1,6 @@
+This directory contains the official ZCPR 3.3 source with minor customizations
+to support the BPBIOS build in the parent directory:
+
+ - Modified to produce a relocatable image compatibile with BPBUILD
+
+See "@WBW Z3ENV.txt" file in parent directory for more information.

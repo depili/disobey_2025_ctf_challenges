@@ -1,0 +1,48 @@
+;===============================================************************
+;		RAM Disk Driver.		**  Hardware Specific **
+;	   D-X Designs Pty Ltd P112		************************
+;
+; 1.1 - 28 Jul 01 - Updated to latest fix for external driver.	HFB
+; 1.0 - 10 Jun 96 - Initial Release for P112 from YASBEC.	HFB
+;=======================================================================
+
+	CSEG
+	  IF  BANKED
+	COMMON	/BANK2/
+	  ENDIF
+
+; This module implements the HBIOS RAM disk driver by using the
+; RomWBW disk interface.
+
+;.....
+; Select the RAM Drive.  This routine performs any setup required in a select.
+
+SELRAM:	JP	SETPARMS	; No action locally.
+
+;.....
+; Read a 128-byte logical sector from the RAM Drive to main memory.
+
+RAMRD:
+	LD	B,HB_DIOREAD	; HBIOS READ
+	JR	RAMIO		; READ/WRITE COMMON CODE
+
+;.....
+; Write a 128-byte logical sector from main memory to the RAM Drive.
+
+RAMWR:
+	XOR	A		; Set Write flag with 0, Read w/AFH
+	LD	(HSTWRT),A	;  clear pending write flag
+;
+	LD	B,HB_DIOWRITE	; HBIOS WRITE
+	JR	RAMIO		; READ/WRITE COMMON CODE
+
+;.....
+; Common code to setup RomWBW disk access
+;
+RAMIO:
+	LD	HL,(HSTDPH)	; GET ACTIVE DPH PTR
+	DEC	HL		; ADJUST TO POINT TO BPBIOS LOGICAL UNIT
+	LD	C,(HL)		; USE AS HBIOS DISK UNIT NUMBER
+	JP	HB_DSKIO	; DO THE REST IN HARD DISK DRIVER
+
+;================== End of RAM Disk Code ====================

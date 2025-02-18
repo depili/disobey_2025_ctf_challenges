@@ -1,0 +1,841 @@
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 1 - 23.12.2024 16:54:58
+
+
+    1/   0 :                            	CPU	8051
+    2/   0 :                            	INCLUDE	p80c51fa.inc
+(1)    1/   0 : =>UNDEFINED             	ifndef  p80c51fainc     ; avoid multiple inclusion
+(1)    2/   0 : =1H                     		equ     p80c51fainc, 1
+(1)    3/   0 :                         		save
+(1)  207/   0 : ALL                                     restore                 ; re-allow listing
+(1)  208/   0 :                         
+(1)  209/   0 : [1]                                     endif			; stddef51inc
+(1)  210/   0 :                         
+    3/   0 :                            	INCLUDE paulmon_v3.0.inc
+(1)    1/   0 :                         ; If you include these lines in your program, you can easily
+(1)    2/   0 :                         ; make calls to the routines built-in to PAULMON2.
+(1)    3/   0 :                         
+(1)    4/   0 : =0H                     	.equ	paulmon2,	0000h
+(1)    5/   0 : =2000H                  	.equ	vector, 02000H			; Location to LJMP interrupt vectors
+(1)    6/   0 :                         
+(1)    7/   0 :                         ; Memory map setup. Programs and extensions are scanned on the regions defined by
+(1)    8/   0 :                         ; bmem - emem and bflash - eflash. All IO should be outside these regions.
+(1)    9/   0 :                         
+(1)   10/   0 : =2000H                  	.equ	pgm, 02000H			; Default location for the user program
+(1)   11/   0 : =1000H                  	.equ	bmem, 01000H			; Where is the beginning of memory
+(1)   12/   0 : =3FFFH                  	.equ	emem, 03FFFH			; End of the memory
+(1)   13/   0 :                         
+(1)   14/   0 : =1H                     	.equ	has_flash, 1			; Set to non-zero value if flash installed
+(1)   15/   0 : =8000H                  	.equ	bflash, 08000H			; First memory location of Flash ROM
+(1)   16/   0 : =0FFFFH                 	.equ	eflash, 0FFFFH			; Last memory location of Flash ROM
+(1)   17/   0 :                         
+(1)   18/   0 : =0H                     	.equ	eintmem, 000h		; End of intmem, set to 0 for 256 bytes
+(1)   19/   0 :                         
+(1)   20/   0 :                         ; Key bindings, do not use lowercase.
+(1)   21/   0 :                         
+(1)   22/   0 : ='?'                    	.equ	help_key, '?'			; Help screen
+(1)   23/   0 : ='M'                    	.equ	dir_key,  'M'			; Directory
+(1)   24/   0 : ='R'                    	.equ	run_key,  'R'			; Run program
+(1)   25/   0 : ='D'                    	.equ	dnld_key, 'D'			; Download
+(1)   26/   0 : ='U'                    	.equ	upld_key, 'U'			; Upload
+(1)   27/   0 : ='N'                    	.equ	nloc_key, 'N'			; New memory location
+(1)   28/   0 : ='J'                    	.equ	jump_key, 'J'			; Jump to memory location
+(1)   29/   0 : ='H'                    	.equ	dump_key, 'H'			; Hex dump memory
+(1)   30/   0 : ='I'                    	.equ	intm_key, 'I'			; Hex dump internal memory
+(1)   31/   0 : ='E'                    	.equ	edit_key, 'E'			; Edit memory
+(1)   32/   0 : ='C'                    	.equ	clrm_key, 'C'			; Clear memory
+(1)   33/   0 : ='Z'                    	.equ	erfr_key, 'Z'			; Erase flash rom
+(1)   34/   0 : ='X'                    	.equ	dump_strings_key, 'X'		; Dump compressed strings
+(1)   35/   0 :                         
+(1)   36/   0 : ='L'                    	.equ	list_key, 'L'			; List (disassemble)
+(1)   37/   0 : ='S'                    	.equ	step_key, 'S'			; Single step run
+(1)   38/   0 : ='E'                    	.equ	vtedit_key, 'E'			; Memory editor
+(1)   39/   0 :                         
+(1)   40/   0 :                         ; These symbols configure paulmon2's internal memory usage.
+(1)   41/   0 :                         ; It is usually not a good idea to change these unless you
+(1)   42/   0 :                         ; know that you really have to.
+(1)   43/   0 :                         
+(1)   44/   0 : =0H                     	.equ	psw_init, 0			; Value for psw (which reg bank to use)
+(1)   45/   0 : (MACRO)                 	USING	Bank0
+(1)   45/   0 : =>FALSE                                 if      (BANK0<0)||(BANK0>3)          ; only BANK0 0..3 allowed
+(1)   45/   0 :                                          error  "Wrong BANK0 number: \{BANK0}"
+(1)   45/   0 : [45]                                    endif
+(1)   45/   0 :                         
+(1)   45/   0 : =>UNDEFINED                             ifdef   RegUsage        ; Book-Keeping about Used Banks
+ AS V1.42 Beta [Bld 254] - Source File kb.asm(paulmon_v3.0.inc) - Page 2 - 23.12.2024 16:54:58
+
+
+(1)   45/   0 :                         RegUsage         set    RegUsage|(2^BANK0)
+(1)   45/   0 : =>TRUE                                  elseif
+(1)   45/   0 : =1H                     RegUsage         set    2^BANK0
+(1)   45/   0 : [45]                                    endif
+(1)   45/   0 :                         
+(1)   45/   0 : =0H                     ar0             set     BANK0*8          ; Set Symbols
+(1)   45/   0 : =1H                     ar1             set     ar0+1
+(1)   45/   0 : =2H                     ar2             set     ar0+2
+(1)   45/   0 : =3H                     ar3             set     ar0+3
+(1)   45/   0 : =4H                     ar4             set     ar0+4
+(1)   45/   0 : =5H                     ar5             set     ar0+5
+(1)   45/   0 : =6H                     ar6             set     ar0+6
+(1)   45/   0 : =7H                     ar7             set     ar0+7
+(1)   46/   0 :                         
+(1)   47/   0 : =10H                    	.equ	dnld_parm, 010H			; Block of 16 bytes for download
+(1)   48/   0 : =80H                    	.equ	stack, 080H			; Location of the stack
+(1)   49/   0 : =78H                    	.equ	baud_save, 078H			; Save baud for warm boot, 4 bytes
+(1)   50/   0 : =2FH                    	.equ	state, 02fh
+(1)   51/   0 : =78H                    ioSkip	bit 	state.0
+(1)   52/   0 : =7CH                    	.equ	lastpc, 07CH			; Two bytes for single step
+(1)   53/   0 :                         
+(1)   54/   0 :                         
+(1)   55/   0 : =8H                     	.equ	backspace, 008h
+(1)   56/   0 : =0DH                    	.equ	CR_char, 00dh
+(1)   57/   0 : =1BH                    	.equ	esc_char, 01bh
+(1)   58/   0 : =7FH                    	.equ	delete_char, 07fh
+(1)   59/   0 : =13H                    	.equ	xoff, 013h
+(1)   60/   0 : =11H                    	.equ	xon, 011h
+(1)   61/   0 :                         
+(1)   62/   0 :                         ; Library routines
+(1)   63/   0 : =36H                    	.equ	pm.phex1,	36h + paulmon2	; Print a single hex digit
+(1)   64/   0 :                         
+(1)   65/   0 : =38H                    	.equ    pm.cout,	38h + paulmon2	; Send Acc to serial port
+(1)   66/   0 :                         
+(1)   67/   0 : =3AH                    	.equ    pm.cin, 	3Ah + paulmon2	; Get Acc from serial port
+(1)   68/   0 :                         
+(1)   69/   0 : =3CH                    	.equ    pm.phex, 	3Ch + paulmon2	; Print Hex value of Acc
+(1)   70/   0 :                         
+(1)   71/   0 : =3EH                    	.equ    pm.phex16, 	3Eh + paulmon2	; Print Hex value of DPTR
+(1)   72/   0 :                         
+(1)   73/   0 : =40H                    	.equ    pm.pstr,	40h + paulmon2	; Print string pointed to by DPTR,
+(1)   74/   0 :                         						; must be terminated by 0 or a high bit set
+(1)   75/   0 :                         						; pressing ESC will stop the printing
+(1)   76/   0 :                         
+(1)   77/   0 : =42H                    	.equ    pm.ghex,	42h + paulmon2	; Get Hex input into Acc
+(1)   78/   0 :                         						; Carry set if ESC has been pressed
+(1)   79/   0 :                         
+(1)   80/   0 : =44H                    	.equ    pm.ghex16,	44h + paulmon2	; Get Hex input into DPTR
+(1)   81/   0 :                         						; Carry set if ESC has been pressed
+(1)   82/   0 :                         
+(1)   83/   0 : =46H                    	.equ    pm.esc,		46h + paulmon2	; Check for ESC key
+(1)   84/   0 :                         						; Carry set if ESC has been pressed
+(1)   85/   0 :                         
+(1)   86/   0 : =48H                    	.equ    pm.upper,	48h + paulmon2	; Convert Acc to uppercase
+(1)   87/   0 :                         						; Non-ASCII values are unchanged
+(1)   88/   0 :                         
+(1)   89/   0 : =4AH                    	.equ    pm.autobaud,	4Ah + paulmon2	; Initialize serial port
+(1)   90/   0 :                         
+(1)   91/   0 : =4DH                    	.equ	pm.pcstr,	4Dh + paulmon2	; Print string in compressed format (no docs)
+(1)   92/   0 :                         
+ AS V1.42 Beta [Bld 254] - Source File kb.asm(paulmon_v3.0.inc) - Page 3 - 23.12.2024 16:54:58
+
+
+(1)   93/   0 : =50H                    	.equ	pm.newline,	50h + paulmon2	; Print CR/LF (13 and 10)
+(1)   94/   0 :                         
+(1)   95/   0 : =52H                    	.equ	pm.lenstr,	52h + paulmon2	; Return the length of a string @DPTR (in R0)
+(1)   96/   0 :                         
+(1)   97/   0 : =55H                    	.equ    pm.pint8u,	55h + paulmon2	; Print Acc at an integer, 0 to 255
+(1)   98/   0 :                         
+(1)   99/   0 : =58H                    	.equ    pm.pint8,	58h + paulmon2	; Print Acc at an integer, -128 to 127
+(1)  100/   0 :                         
+(1)  101/   0 : =5BH                    	.equ    pm.pint16u,	5Bh + paulmon2	; Print DPTR as an integer, 0 to 65535
+(1)  102/   0 :                         
+(1)  103/   0 : =5EH                    	.equ	pm.smart_wr,	5Eh + paulmon2	; Write Acc @DPTR (RAM or flash), C=1 if error
+(1)  104/   0 :                         
+(1)  105/   0 : =61H                    	.equ	pm.prgm,	61h + paulmon2	; Write Acc @DPTR to Flash ROM, C=1 if error
+(1)  106/   0 :                         
+(1)  107/   0 : =64H                    	.equ	pm.erall,	64h + paulmon2	; Erase the Flash ROM chip, C=1 if error
+(1)  108/   0 :                         
+(1)  109/   0 : =67H                    	.equ	pm.find,	67h + paulmon2	; Find next program header in memory
+(1)  110/   0 :                         
+(1)  111/   0 : =6AH                    	.equ	pm.cin_filter,	6Ah + paulmon2	; Like cin, but scan for arrow keys, pgup/pgdn
+(1)  112/   0 :                         
+(1)  113/   0 : =6DH                    	.equ	pm.asc2hex,	6Dh + paulmon2	; Convert character 0-9,A-F to number 0-15.
+(1)  114/   0 :                         
+    4/   0 :                            
+    5/   0 : =0H                        	EQU	base, 0000h
+    6/   0 :                            
+    7/   0 : =6020H                     	EQU	lcd_cmd, 6020h
+    8/   0 : =6021H                     	EQU	lcd_data, 6021h
+    9/   0 : =60FCH                     	EQU	kb_data, 60FCh
+   10/   0 : =60E0H                     	EQU	leds_1, 60E0h
+   11/   0 : =4H                        	EQU	leds_spacing, 4
+   12/   0 : =5H                        	EQU	leds_registers, 5
+   13/   0 : =0AH                       	EQU	numbers, 10
+   14/   0 :                            
+   15/   0 :                            	ORG 	base
+   16/   0 :                            
+   17/30 :                              	SEGMENT	DATA
+   18/40 :                              	ORG	40h
+   19/40 :                              numbers_store:
+   20/40 :                              	DB	numbers dup(?)
+   21/4A :                              
+   22/4A :                              	DB	? 				; Junk
+   23/4B :                              bitmap_store:
+   24/4B :                              	DB	5 dup(?)
+   25/50 :                              	DB	?				; Junk
+   26/51 :                              leds_buffer:
+   27/51 :                              	DB	5 dup(?)
+   28/56 :                              leds_buffer2:
+   29/56 :                              	DB	5 dup(?)
+   30/5B :                              galois_state:
+   31/5B :                              	DB	4 dup(?)
+   32/5F :                              
+   33/   0 :                            	SEGMENT	CODE
+   34/   0 :                            
+   35/   0 : A1 40                      	jmp	gen_presses
+   36/   2 :                            
+   37/ 500 :                            	ORG	base + 500h
+   38/ 500 : A5 E5 E0 A5                	db	0A5H,0E5H,0E0H,0A5H		; signature
+   39/ 504 : FE 41 00 00                	db	254,'A',0,0			; id (254=user installed command)
+   40/ 508 : 00 00 00 00                	db	0,0,0,0				; prompt code vector
+   41/ 50C : 00 00 00 00                	db	0,0,0,0				; reserved
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 4 - 23.12.2024 16:54:58
+
+
+   42/ 510 : 00 00 00 00                	db	0,0,0,0				; reserved
+   43/ 514 : 00 00 00 00                	db	0,0,0,0				; reserved
+   44/ 518 : 00 00 00 00                	db	0,0,0,0				; user defined
+   45/ 51C : FF FF FF FF                	db	255,255,255,255			; length and checksum (255=unused)
+   46/ 520 : 4C 69 67 68 74 73 20 63 68 	db	"Lights challenge",0
+       529 : 61 6C 6C 65 6E 67 65 00   
+   47/ 540 :                            	ORG	base + 540h
+   48/ 540 :                            
+   49/ 540 :                            
+   50/ 540 :                            gen_presses:
+   51/ 540 : 75 81 80                   	mov	sp, #stack
+   52/ 543 : D1 4E                      	call	get_key
+   53/ 545 :                            
+   54/ 545 : D1 95                      	call	clear_leds
+   55/ 547 : D1 DF                      	call	lcd_init
+   56/ 549 : 90 07 3C                   	mov	dptr, #banner
+   57/ 54C : F1 18                      	call	lcd_print
+   58/ 54E : F1 00                      	call	lcd_line_2
+   59/ 550 : F1 18                      	call	lcd_print
+   60/ 552 :                            
+   61/ 552 :                            
+   62/ 552 :                            	; Fill numbers with 0xff
+   63/ 552 : 74 FF                      	mov	a, #0ffh
+   64/ 554 : 78 40                      	mov	r0, #numbers_store
+   65/ 556 : 7D 0A                      	mov	r5, #numbers
+   66/ 558 : F6                         -	mov	@r0, a
+   67/ 559 : 08                         	inc	r0
+   68/ 55A : DD FC                      	djnz	r5, -
+   69/ 55C :                            
+   70/ 55C : 79 40                      	mov	r1, #numbers_store
+   71/ 55E : 7D 0A                      	mov	r5, #numbers			; Unique numbers
+   72/ 560 : 7C 00                      .number	mov	r4, #0
+   73/ 562 : 7E 05                      	mov	r6, #5				; Bits per
+   74/ 564 : D1 65                      -	call	galois				; new bit in C
+   75/ 566 : EC                         	mov	a, r4
+   76/ 567 : 33                         	rlc	A
+   77/ 568 : FC                         	mov	r4, a
+   78/ 569 : DE F9                      	djnz	r6, -
+   79/ 56B : B4 14 02                   	cjne	a, #20, +
+   80/ 56E : 80 F0                      	jmp	.number
+   81/ 570 : 50 EE                      +	jnc	.number
+   82/ 572 :                            
+   83/ 572 :                            	; Check for duplicates
+   84/ 572 :                            
+   85/ 572 : 78 40                      	mov	r0,	#numbers_store
+   86/ 574 : 7E 0A                      	mov	r6,	#numbers
+   87/ 576 :                            
+   88/ 576 : EC                         -	mov	a, r4
+   89/ 577 : 96                         	subb	a, @r0
+   90/ 578 : 60 05                      	jz	.duplicate
+   91/ 57A :                            
+   92/ 57A : 08                         	inc	r0
+   93/ 57B : DE F9                      	djnz	r6, -
+   94/ 57D :                            
+   95/ 57D :                            	; No duplicates found
+   96/ 57D : 80 02                      	jmp	.store
+   97/ 57F :                            
+   98/ 57F :                            .duplicate:
+   99/ 57F : 80 DF                      	jmp	.number
+  100/ 581 :                            
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 5 - 23.12.2024 16:54:58
+
+
+  101/ 581 :                            .store:
+  102/ 581 : F7                         	mov	@r1, a
+  103/ 582 : 09                         	inc	r1
+  104/ 583 : DD DB                      	djnz	r5, .number				; R5 = numbers to generate
+  105/ 585 :                            
+  106/ 585 :                            	; We have the unique buttons...
+  107/ 585 :                            
+  108/ 585 : 74 FF                      	mov	a, #0ffh
+  109/ 587 : 78 4B                      	mov	r0, #bitmap_store
+  110/ 589 : 7A 05                      	mov	r2, #5
+  111/ 58B : F6                         -	mov	@r0, a
+  112/ 58C : 08                         	inc	r0
+  113/ 58D : DA FC                      	djnz	r2, -
+  114/ 58F :                            
+  115/ 58F : 78 40                      	mov	r0, #numbers_store
+  116/ 591 : 7D 0A                      	mov	r5, #numbers
+  117/ 593 :                            
+  118/ 593 : E6                         -	mov	a, @r0
+  119/ 594 : 7F 01                      	mov	r7, #1
+  120/ 596 : D1 1D                      	call	bitmap_xor
+  121/ 598 : 08                         	inc	r0
+  122/ 599 : DD F8                      	djnz	r5, -
+  123/ 59B :                            
+  124/ 59B :                            
+  125/ 59B :                            
+  126/ 59B : B1 FF                      	call	.set_leds
+  127/ 59D : D1 4E                      	call	get_key
+  128/ 59F : D1 F7                      	call	lcd_home
+  129/ 5A1 : 90 07 5E                   	mov	dptr, #response
+  130/ 5A4 : F1 18                      	call	lcd_print
+  131/ 5A6 : F1 00                      	call	lcd_line_2
+  132/ 5A8 : F1 18                      	call	lcd_print
+  133/ 5AA : F1 00                      	call	lcd_line_2
+  134/ 5AC :                            
+  135/ 5AC :                            .solve:
+  136/ 5AC : 78 56                      	mov	r0, #leds_buffer2
+  137/ 5AE : 79 05                      	mov	r1, #5
+  138/ 5B0 : 76 FF                      -	mov	@r0, #0FFh
+  139/ 5B2 : 08                         	inc	r0
+  140/ 5B3 : D9 FB                      	djnz	r1, -
+  141/ 5B5 :                            
+  142/ 5B5 : 74 FF                      	mov	a, #0ffh
+  143/ 5B7 : 90 60 E0                   	mov	dptr, #leds_1
+  144/ 5BA : F0                         	movx	@dptr, a
+  145/ 5BB : 90 60 E4                   	mov	dptr, #(leds_1 + leds_spacing)
+  146/ 5BE : F0                         	movx	@dptr, a
+  147/ 5BF : 90 60 E8                   	mov	dptr, #(leds_1 + (leds_spacing * 2))
+  148/ 5C2 : F0                         	movx	@dptr, a
+  149/ 5C3 : 90 60 EC                   	mov	dptr, #(leds_1 + (leds_spacing * 3))
+  150/ 5C6 : F0                         	movx	@dptr, a
+  151/ 5C7 : 90 60 F0                   	mov	dptr, #(leds_1 + (leds_spacing * 4))
+  152/ 5CA : F0                         	movx	@dptr, a
+  153/ 5CB :                            
+  154/ 5CB :                            	; Get the solution
+  155/ 5CB : 7B 0A                      	mov	r3, #numbers
+  156/ 5CD :                            
+  157/ 5CD : D1 4E                      -	call	get_key		; A, R7, DPTR
+  158/ 5CF : D1 B8                      	call	key_to_led	; R1, R5, R6, R7, DPTR
+  159/ 5D1 : 7F 01                      	mov	r7, #1
+  160/ 5D3 : D1 1D                      	call	bitmap_xor	; A, R1, R2, R4
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 6 - 23.12.2024 16:54:58
+
+
+  161/ 5D5 :                            
+  162/ 5D5 :                            ;	call	.set_leds
+  163/ 5D5 :                            
+  164/ 5D5 :                            
+  165/ 5D5 : 74 2A                      	mov	a, #"*"
+  166/ 5D7 : F1 0D                      	call	lcd_putc	; R4, DPTR
+  167/ 5D9 : DB F2                      	djnz	r3, -
+  168/ 5DB :                            
+  169/ 5DB :                            
+  170/ 5DB :                            	; Check solution
+  171/ 5DB : 78 4B                      	mov	r0, #bitmap_store
+  172/ 5DD : 79 05                      	mov	r1, #5
+  173/ 5DF : B6 FF 10                   -	cjne	@r0, #0FFH, .fail
+  174/ 5E2 : 08                         	inc	r0
+  175/ 5E3 : D9 FA                      	djnz	r1, -
+  176/ 5E5 :                            	; WIN
+  177/ 5E5 :                            
+  178/ 5E5 : D1 F7                      	call	lcd_home
+  179/ 5E7 : 90 07 A2                   	mov	dptr, #flag
+  180/ 5EA : F1 18                      	call	lcd_print
+  181/ 5EC : F1 00                      	call	lcd_line_2
+  182/ 5EE : F1 18                      	call	lcd_print
+  183/ 5F0 :                            
+  184/ 5F0 : A1 40                      	jmp	gen_presses
+  185/ 5F2 :                            .fail:
+  186/ 5F2 : D1 F7                      	call	lcd_home
+  187/ 5F4 : 90 07 80                   	mov	dptr, #wrong
+  188/ 5F7 : F1 18                      	call	lcd_print
+  189/ 5F9 : F1 00                      	call	lcd_line_2
+  190/ 5FB : F1 18                      	call	lcd_print
+  191/ 5FD :                            
+  192/ 5FD : A1 40                      	jmp	gen_presses
+  193/ 5FF :                            
+  194/ 5FF :                            ; Destroys R0, R1, DPTR, ACC
+  195/ 5FF :                            .set_leds:
+  196/ 5FF : 78 4B                      	mov	r0, #bitmap_store
+  197/ 601 : 79 05                      	mov	r1, #5
+  198/ 603 : 90 60 E0                   	mov	dptr, #leds_1
+  199/ 606 : E6                         -	mov	a, @r0
+  200/ 607 : F0                         	movx	@dptr, a
+  201/ 608 : 08                         	inc	r0
+  202/ 609 : A3                         	inc	dptr
+  203/ 60A : A3                         	inc	dptr
+  204/ 60B : A3                         	inc	dptr
+  205/ 60C : A3                         	inc	dptr
+  206/ 60D : D9 F7                      	djnz	r1, -
+  207/ 60F : 22                         	ret
+  208/ 610 :                            
+  209/ 610 :                            
+  210/ 610 :                            huge_delay:
+  211/ 610 : 78 1E                      	mov	r0, #30
+  212/ 612 : 79 00                      .loop1	mov	r1, #0
+  213/ 614 : 7A 00                      .loop2	mov	r2, #0
+  214/ 616 : DA FE                      .loop3	djnz	r2, .loop3
+  215/ 618 : D9 FA                      	djnz	r1, .loop2
+  216/ 61A : D8 F6                      	djnz	r0, .loop1
+  217/ 61C : 22                         	ret
+  218/ 61D :                            
+  219/ 61D :                            	; A - input
+  220/ 61D :                            	; R7 - led, 1 or 2
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 7 - 23.12.2024 16:54:58
+
+
+  221/ 61D :                            	; Destroys A, R1, R2, R4
+  222/ 61D :                            bitmap_xor:
+  223/ 61D : FA                         	mov	r2, a			; Save lower 2 bits
+  224/ 61E : C3                         	clr	c
+  225/ 61F : 13                         	rrc	a
+  226/ 620 : C3                         	clr	c
+  227/ 621 : 13                         	rrc	a
+  228/ 622 : 24 4B                      	add	a, #bitmap_store	; Store location
+  229/ 624 : F9                         	mov	r1, a
+  230/ 625 : EA                         	mov	a, r2
+  231/ 626 : 54 03                      	anl	a, #3			; Lower 2 bits
+  232/ 628 : FA                         	mov	r2, a
+  233/ 629 : EF                         	mov	a, R7
+  234/ 62A :                            
+  235/ 62A : BA 00 1C                   -	cjne	r2, #00, +
+  236/ 62D : FC                         	mov	R4, A
+  237/ 62E : 67                         	xrl	A, @r1
+  238/ 62F : F7                         	mov	@r1, A
+  239/ 630 :                            
+  240/ 630 : 09                         	inc	R1
+  241/ 631 : EC                         	mov	A, R4
+  242/ 632 : 67                         	xrl	A, @R1
+  243/ 633 : F7                         	mov	@R1, A
+  244/ 634 :                            
+  245/ 634 : 19                         	dec	R1
+  246/ 635 : 19                         	dec	R1
+  247/ 636 : EC                         	mov	A, R4
+  248/ 637 : 67                         	xrl	A, @R1
+  249/ 638 : F7                         	mov	@R1, A
+  250/ 639 :                            
+  251/ 639 : 09                         	inc	R1
+  252/ 63A :                            
+  253/ 63A : EC                         	mov	A, R4
+  254/ 63B :                            
+  255/ 63B : C3                         	clr	C
+  256/ 63C : 13                         	rrc	A
+  257/ 63D : C3                         	clr	C
+  258/ 63E : 13                         	rrc	A
+  259/ 63F : 67                         	xrl	A, @r1
+  260/ 640 : F7                         	mov	@r1, a
+  261/ 641 :                            
+  262/ 641 : EC                         	mov	A, R4
+  263/ 642 : C3                         	clr	C
+  264/ 643 : 33                         	rlc	A
+  265/ 644 : C3                         	clr	C
+  266/ 645 : 33                         	rlc	A
+  267/ 646 : 67                         	xrl	A, @r1
+  268/ 647 : F7                         	mov	@r1, a
+  269/ 648 : 22                         	ret
+  270/ 649 : 23                         +	rl	a
+  271/ 64A : 23                         	rl	a
+  272/ 64B : 1A                         	dec	r2
+  273/ 64C : 80 DC                      	jmp	-
+  274/ 64E :                            
+  275/ 64E :                            
+  276/ 64E :                            
+  277/ 64E :                            ; Destroys A, R7
+  278/ 64E :                            get_key:
+  279/ 64E : 90 60 FC                   	MOV	DPTR, #kb_data
+  280/ 651 : E0                         	MOVX	A, @DPTR
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 8 - 23.12.2024 16:54:58
+
+
+  281/ 652 : FF                         	MOV	R7, A
+  282/ 653 :                            .loop:
+  283/ 653 : D1 65                      	call	galois
+  284/ 655 : E0                         	MOVX	A, @DPTR
+  285/ 656 : C0 E0                      	PUSH	ACC
+  286/ 658 : 6F                         	XRL	A, R7
+  287/ 659 : 70 04                      	JNZ	.changed
+  288/ 65B : D0 E0                      	POP	ACC
+  289/ 65D : 80 F4                      	JMP	.loop
+  290/ 65F :                            .changed:
+  291/ 65F : D0 E0                      	POP	ACC
+  292/ 661 : 20 E7 EA                   	JB	ACC.7, get_key		; Key down event
+  293/ 664 : 22                         	RET
+  294/ 665 :                            
+  295/ 665 :                            ; Destroys A
+  296/ 665 :                            galois:
+  297/ 665 : EF                         	mov	A, R7
+  298/ 666 : C0 E0                      	push	acc
+  299/ 668 : E8                         	mov	A, R0
+  300/ 669 : C0 E0                      	push	acc
+  301/ 66B : E5 5B                      	mov	A, galois_state
+  302/ 66D : 45 5C                      	orl	A, galois_state+1
+  303/ 66F : 45 5D                      	orl	A, galois_state+2
+  304/ 671 : 45 5E                      	orl	A, galois_state+3
+  305/ 673 : 70 03                      	jnz	.process
+  306/ 675 :                            	; Initialize the LFSR, as 0 is a lock-up state
+  307/ 675 : 75 5B 2A                   	mov	galois_state, #42
+  308/ 678 :                            .process:
+  309/ 678 : C3                         	clr	C
+  310/ 679 : 78 5B                      	mov	R0, #galois_state
+  311/ 67B : 7F 04                      	mov	R7, #4
+  312/ 67D :                            .loop:
+  313/ 67D : E6                         	mov	A, @R0
+  314/ 67E : 13                         	rrc	A
+  315/ 67F : F6                         	mov 	@R0, A
+  316/ 680 : 08                         	inc	R0
+  317/ 681 : DF FA                      	djnz	R7, .loop
+  318/ 683 : 40 02                      	jc	.carry
+  319/ 685 : 80 07                      	jmp	.end
+  320/ 687 :                            .carry:
+  321/ 687 : E5 5B                      	mov	A, galois_state
+  322/ 689 : 64 A3                      	xrl	A, #0A3h
+  323/ 68B : F5 5B                      	mov	galois_state, A
+  324/ 68D : D3                         	setb	C
+  325/ 68E :                            .end:
+  326/ 68E : D0 E0                      	pop	acc
+  327/ 690 : F8                         	mov	R0, A
+  328/ 691 : D0 E0                      	pop	acc
+  329/ 693 : FF                         	mov	R7, A
+  330/ 694 : 22                         	ret
+  331/ 695 :                            
+  332/ 695 :                            clear_leds:
+  333/ 695 : C0 82                      	PUSH	DPL
+  334/ 697 : C0 83                      	PUSH	DPH
+  335/ 699 : C0 E0                      	PUSH	ACC
+  336/ 69B : 90 60 E0                   	MOV	DPTR, #leds_1
+  337/ 69E : 7F 05                      	MOV	R7, #leds_registers
+  338/ 6A0 : 78 51                      	MOV	R0, #leds_buffer
+  339/ 6A2 :                            .loop:
+  340/ 6A2 : 74 FF                      	MOV	A, #0FFh
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 9 - 23.12.2024 16:54:58
+
+
+  341/ 6A4 : F0                         	MOVX	@DPTR, A
+  342/ 6A5 : F6                         	MOV	@R0, A
+  343/ 6A6 : E5 82                      	MOV	A, DPL
+  344/ 6A8 : 24 04                      	ADD	A, #leds_spacing
+  345/ 6AA : F5 82                      	MOV	DPL, A
+  346/ 6AC : 08                         	INC	R0
+  347/ 6AD : DF F3                      	DJNZ	R7, .loop
+  348/ 6AF : D0 E0                      	POP	ACC
+  349/ 6B1 : D0 83                      	POP	DPH
+  350/ 6B3 : D0 82                      	POP	DPL
+  351/ 6B5 : C2 8C                      	CLR	TR0
+  352/ 6B7 : 22                         	RET
+  353/ 6B8 :                            
+  354/ 6B8 :                            ; Destroys R1, R5, R6, R7, DPTR
+  355/ 6B8 :                            key_to_led:
+  356/ 6B8 : C0 E0                      	PUSH	ACC
+  357/ 6BA : FF                         	MOV	R7, A		; R7 = keycode
+  358/ 6BB : 54 03                      	ANL	A, #03h
+  359/ 6BD : FE                         	MOV	R6, A		; R6 = The in-byte offset
+  360/ 6BE : EF                         	MOV	A, R7
+  361/ 6BF : 54 7C                      	ANL	A, #07Ch	; The register offset
+  362/ 6C1 : FD                         	MOV	R5, A		; R5 = register offset
+  363/ 6C2 :                            
+  364/ 6C2 : 90 60 E0                   	MOV	DPTR, #leds_1
+  365/ 6C5 : E5 82                      	MOV	A, DPL
+  366/ 6C7 : 2D                         	ADD	A, R5
+  367/ 6C8 : F5 82                      	MOV	DPL, A		; DPTR = register address
+  368/ 6CA : ED                         	MOV	A, R5
+  369/ 6CB : 03                         	RR	A
+  370/ 6CC : 03                         	RR	A
+  371/ 6CD : 24 56                      	ADD	A, #leds_buffer2
+  372/ 6CF : F9                         	MOV	R1, A
+  373/ 6D0 : EF                         	MOV	A, R7
+  374/ 6D1 : 74 02                      	MOV	A, #02h
+  375/ 6D3 :                            .bit_loop:
+  376/ 6D3 : 23                         	RL	A
+  377/ 6D4 : 23                         	RL	A
+  378/ 6D5 : 1E                         	DEC	R6
+  379/ 6D6 : BE 00 FA                   	CJNE	R6, #0, .bit_loop
+  380/ 6D9 : 67                         	XRL	A, @R1
+  381/ 6DA : F0                         	MOVX	@DPTR, A
+  382/ 6DB : F7                         	MOV	@R1, A
+  383/ 6DC :                            
+  384/ 6DC : D0 E0                      	POP	ACC
+  385/ 6DE : 22                         	RET
+  386/ 6DF :                            
+  387/ 6DF :                            lcd_init:
+  388/ 6DF : 90 60 20                   	MOV	dptr, #lcd_cmd
+  389/ 6E2 : 74 38                      	MOV	A, #38h				; 8 bit interface, 2 rows, 5x8 font
+  390/ 6E4 : F0                         	MOVX	@dptr, A
+  391/ 6E5 : F1 33                      	CALL	delay_long
+  392/ 6E7 : 74 0C                      	MOV	A, #0Ch				; Display on, cursor off, blink off
+  393/ 6E9 : F0                         	MOVX	@dptr, A
+  394/ 6EA : F1 33                      	CALL	delay_long
+  395/ 6EC : 74 02                      	MOV	A, #02h				; Home display
+  396/ 6EE : F0                         	MOVX	@dptr, A
+  397/ 6EF : F1 33                      	CALL	delay_long
+  398/ 6F1 : 74 01                      	MOV	A, #01h				; Clear display
+  399/ 6F3 : F0                         	MOVX	@dptr, A
+  400/ 6F4 : F1 33                      	CALL	delay_long
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 10 - 23.12.2024 16:54:58
+
+
+  401/ 6F6 : 22                         	RET
+  402/ 6F7 :                            
+  403/ 6F7 :                            lcd_home:
+  404/ 6F7 : 90 60 20                   	MOV	dptr, #lcd_cmd
+  405/ 6FA : 74 02                      	MOV	A, #02h				; Home display
+  406/ 6FC : F0                         	MOVX	@dptr, A
+  407/ 6FD : F1 33                      	CALL	delay_long
+  408/ 6FF : 22                         	RET
+  409/ 700 :                            
+  410/ 700 :                            lcd_line_2:
+  411/ 700 : 05 A2                      	INC	AUXR1
+  412/ 702 : 90 60 20                   	MOV	dptr, #lcd_cmd
+  413/ 705 : 74 C0                      	MOV	A, #0C0h			; Set dram address 0x40
+  414/ 707 : F0                         	MOVX	@dptr, A
+  415/ 708 : F1 33                      	CALL	delay_long
+  416/ 70A : 05 A2                      	INC	AUXR1
+  417/ 70C : 22                         	RET
+  418/ 70D :                            
+  419/ 70D :                            ; Destroys dptr, R4
+  420/ 70D :                            lcd_putc:
+  421/ 70D : 05 A2                      	INC	AUXR1
+  422/ 70F : 90 60 21                   	MOV	dptr, #lcd_data
+  423/ 712 : F0                         	MOVX	@dptr, A
+  424/ 713 : F1 2E                      	call	delay				; R4
+  425/ 715 : 05 A2                      	INC	AUXR1
+  426/ 717 : 22                         	RET
+  427/ 718 :                            
+  428/ 718 :                            lcd_print:
+  429/ 718 : 05 A2                      	INC	AUXR1
+  430/ 71A : 90 60 21                   	MOV	dptr, #lcd_data
+  431/ 71D : 05 A2                      	INC	AUXR1
+  432/ 71F :                            .loop:
+  433/ 71F : E4                         	CLR	A
+  434/ 720 : 93                         	MOVC	A, @a+dptr
+  435/ 721 : A3                         	INC	dptr
+  436/ 722 : 60 09                      	JZ	.end
+  437/ 724 : 05 A2                      	INC	AUXR1
+  438/ 726 : F0                         	MOVX	@dptr, A
+  439/ 727 : 05 A2                      	INC	AUXR1
+  440/ 729 : F1 2E                      	CALL	delay
+  441/ 72B : 80 F2                      	SJMP	.loop
+  442/ 72D :                            .end
+  443/ 72D : 22                         	RET
+  444/ 72E :                            
+  445/ 72E :                            delay:
+  446/ 72E :                            ;	MOV 	r5, #0ffh
+  447/ 72E : 7C 28                      -	MOV 	r4, #028h
+  448/ 730 : DC FE                      	DJNZ 	r4, $
+  449/ 732 :                            ;	DJNZ 	r5, -
+  450/ 732 : 22                         	RET
+  451/ 733 :                            
+  452/ 733 :                            delay_long:
+  453/ 733 : 7D 2F                      	MOV 	r5, #02fh
+  454/ 735 : 7C FF                      -	MOV 	r4, #0ffh
+  455/ 737 : DC FE                      	DJNZ 	r4, $
+  456/ 739 : DD FA                      	DJNZ 	r5, -
+  457/ 73B : 22                         	RET
+  458/ 73C :                            
+  459/ 73C :                            banner:
+  460/ 73C : 4B 6F 75 76 6F 73 74 6F 20 	DB	"Kouvosto Telecom", 0
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 11 - 23.12.2024 16:54:58
+
+
+       745 : 54 65 6C 65 63 6F 6D 00   
+  461/ 74D :                            banner2:
+  462/ 74D : 45 6E 74 65 72 20 72 65 73 	DB	"Enter response: ", 0
+       756 : 70 6F 6E 73 65 3A 20 00   
+  463/ 75E :                            
+  464/ 75E :                            response:
+  465/ 75E : 45 6E 74 65 72 20 43 6F 64 	DB	"Enter Code:     ", 0
+       767 : 65 3A 20 20 20 20 20 00   
+  466/ 76F :                            response2:
+  467/ 76F : 20 20 20 20 20 20 20 20 20 	DB	"                ", 0
+       778 : 20 20 20 20 20 20 20 00   
+  468/ 780 :                            
+  469/ 780 :                            wrong:
+  470/ 780 : 57 72 6F 6E 67 20 63 6F 64 	DB	"Wrong code!     ", 0
+       789 : 65 21 20 20 20 20 20 00   
+  471/ 791 :                            wrong2:
+  472/ 791 : 2A 2A 20 54 72 79 20 68 61 	DB	"** Try harder **", 0
+       79A : 72 64 65 72 20 2A 2A 00   
+  473/ 7A2 :                            
+  474/ 7A2 :                            flag:
+  475/ 7A2 : 44 49 53 4F 42 45 59 5B 6C 	DB	"DISOBEY[lights  ", 0
+       7AB : 69 67 68 74 73 20 20 00   
+  476/ 7B3 :                            flag2:
+  477/ 7B3 : 6F 75 74 20 69 6E 20 4C 6F 	DB	"out in London]  ", 0
+       7BC : 6E 64 6F 6E 5D 20 20 00   
+  478/ 7C4 :                            
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 12 - 23.12.2024 16:54:58
+
+
+  Symbol Table (* = unused):
+  --------------------------
+
+*AC :                            D6 B |  ACC :                          0E0 D |
+ AR0 :                            0 - | *AR1 :                            1 - |
+*AR2 :                            2 - | *AR3 :                            3 - |
+*AR4 :                            4 - | *AR5 :                            5 - |
+*AR6 :                            6 - | *AR7 :                            7 - |
+*ARCHITECTURE :  "x86_64-apple-osx" - | *AUXR :                          8E D |
+ AUXR1 :                        0A2 D | *B :                            0F0 D |
+*BACKSPACE :                      8 - |  BANK0 :                          0 - |
+*BANK1 :                          1 - | *BANK2 :                          2 - |
+*BANK3 :                          3 - |  BANNER :                       73C C |
+*BANNER2 :                      74D C |  BASE :                           0 - |
+*BAUD_SAVE :                     78 - | *BFLASH :                      8000 - |
+*BIGENDIAN :                      0 - |  BITMAP_STORE :                  4B D |
+ BITMAP_XOR :                   61D C | *BMEM :                        1000 - |
+*CASESENSITIVE :                  0 - | *CCAP0H :                       0FA D |
+*CCAP0L :                       0EA D | *CCAP1H :                       0FB D |
+*CCAP1L :                       0EB D | *CCAP2H :                       0FC D |
+*CCAP2L :                       0EC D | *CCAP3H :                       0FD D |
+*CCAP3L :                       0ED D | *CCAP4H :                       0FE D |
+*CCAP4L :                       0EE D | *CCAPM0 :                       0DA D |
+*CCAPM1 :                       0DB D | *CCAPM2 :                       0DC D |
+*CCAPM3 :                       0DD D | *CCAPM4 :                       0DE D |
+*CCF0 :                          D8 B | *CCF1 :                          D9 B |
+*CCF2 :                          DA B | *CCF3 :                          DB B |
+*CCF4 :                          DC B |  CCON :                         0D8 D |
+*CF :                            DF B | *CH :                           0F9 D |
+*CL :                           0E9 D |  CLEAR_LEDS :                   695 C |
+ CLEAR_LEDS.LOOP :              6A2 C | *CLRM_KEY :                     'C' - |
+*CMOD :                         0D9 D | *CONSTPI :        3.141592653589793 - |
+*CPRL2 :                         C8 B | *CR :                            DE B |
+*CR_CHAR :                       0D - | *CT2 :                           C9 B |
+*CY :                            D7 B | *DATE :                "23.12.2024" - |
+ DELAY :                        72E C |  DELAY_LONG :                   733 C |
+*DELETE_CHAR :                   7F - | *DIR_KEY :                      'M' - |
+*DNLD_KEY :                     'D' - | *DNLD_PARM :                     10 - |
+ DPH :                           83 D |  DPL :                           82 D |
+*DUMP_KEY :                     'H' - | *DUMP_STRINGS_KEY :             'X' - |
+*EA :                            AF B | *EC :                            AE B |
+*EDIT_KEY :                     'E' - | *EFLASH :                     0FFFF - |
+*EINTMEM :                        0 - | *EMEM :                        3FFF - |
+*ERFR_KEY :                     'Z' - | *ES :                            AC B |
+*ESC_CHAR :                      1B - | *ET0 :                           A9 B |
+*ET1 :                           AB B | *ET2 :                           AD B |
+*EX0 :                           A8 B | *EX1 :                           AA B |
+*EXEN2 :                         CB B | *EXF2 :                          CE B |
+*F0 :                            D5 B | *FALSE :                          0 - |
+ FLAG :                         7A2 C | *FLAG2 :                        7B3 C |
+*FULLPMMU :                       1 - |  GALOIS :                       665 C |
+ GALOIS.CARRY :                 687 C |  GALOIS.END :                   68E C |
+ GALOIS.LOOP :                  67D C |  GALOIS.PROCESS :               678 C |
+ GALOIS_STATE :                  5B D |  GEN_PRESSES :                  540 C |
+ GEN_PRESSES.DUPLICATE :        57F C |  GEN_PRESSES.FAIL :             5F2 C |
+ GEN_PRESSES.NUMBER :           560 C |  GEN_PRESSES.SET_LEDS :         5FF C |
+*GEN_PRESSES.SOLVE :            5AC C |  GEN_PRESSES.STORE :            581 C |
+ GET_KEY :                      64E C |  GET_KEY.CHANGED :              65F C |
+ GET_KEY.LOOP :                 653 C | *HAS64 :                          1 - |
+*HASFPU :                         0 - | *HASPMMU :                        0 - |
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 13 - 23.12.2024 16:54:58
+
+
+*HAS_FLASH :                      1 - | *HELP_KEY :                     '?' - |
+*HUGE_DELAY :                   610 C |  HUGE_DELAY.LOOP1 :             612 C |
+ HUGE_DELAY.LOOP2 :             614 C |  HUGE_DELAY.LOOP3 :             616 C |
+ IE :                           0A8 D | *IE0 :                           89 B |
+*IE1 :                           8B B | *INSRCMODE :                      0 - |
+*INSUPMODE :                      0 - | *INT0 :                          B2 B |
+*INT1 :                          B3 B | *INTM_KEY :                     'I' - |
+*IOSKIP :                        78 B |  IP :                           0B8 D |
+*IPH :                          0B7 D | *IT0 :                           88 B |
+*IT1 :                           8A B | *JUMP_KEY :                     'J' - |
+ KB_DATA :                     60FC - |  KEY_TO_LED :                   6B8 C |
+ KEY_TO_LED.BIT_LOOP :          6D3 C | *LASTPC :                        7C - |
+ LCD_CMD :                     6020 - |  LCD_DATA :                    6021 - |
+ LCD_HOME :                     6F7 C |  LCD_INIT :                     6DF C |
+ LCD_LINE_2 :                   700 C |  LCD_PRINT :                    718 C |
+ LCD_PRINT.END :                72D C |  LCD_PRINT.LOOP :               71F C |
+ LCD_PUTC :                     70D C |  LEDS_1 :                      60E0 - |
+ LEDS_BUFFER :                   51 D |  LEDS_BUFFER2 :                  56 D |
+ LEDS_REGISTERS :                 5 - |  LEDS_SPACING :                   4 - |
+*LISTON :                         1 - | *LIST_KEY :                     'L' - |
+*MACEXP :                         7 - | *MOMCPU :                      8051 - |
+*MOMCPUNAME :                "8051" - | *NESTMAX :                      100 - |
+*NLOC_KEY :                     'N' - |  NUMBERS :                       0A - |
+ NUMBERS_STORE :                 40 D | *OV :                            D2 B |
+*P :                             D0 B | *P0 :                            80 D |
+*P1 :                            90 D | *P2 :                           0A0 D |
+ P3 :                           0B0 D | *P80C51FAINC :                    1 - |
+*PADDING :                        1 - |  PAULMON2 :                       0 - |
+*PCON :                          87 D | *PGM :                         2000 - |
+*PM.ASC2HEX :                    6D - | *PM.AUTOBAUD :                   4A - |
+*PM.CIN :                        3A - | *PM.CIN_FILTER :                 6A - |
+*PM.COUT :                       38 - | *PM.ERALL :                      64 - |
+*PM.ESC :                        46 - | *PM.FIND :                       67 - |
+*PM.GHEX :                       42 - | *PM.GHEX16 :                     44 - |
+*PM.LENSTR :                     52 - | *PM.NEWLINE :                    50 - |
+*PM.PCSTR :                      4D - | *PM.PHEX :                       3C - |
+*PM.PHEX1 :                      36 - | *PM.PHEX16 :                     3E - |
+*PM.PINT16U :                    5B - | *PM.PINT8 :                      58 - |
+*PM.PINT8U :                     55 - | *PM.PRGM :                       61 - |
+*PM.PSTR :                       40 - | *PM.SMART_WR :                   5E - |
+*PM.UPPER :                      48 - | *PPC :                           BE B |
+*PS :                            BC B |  PSW :                          0D0 D |
+*PSW_INIT :                       0 - | *PT0 :                           B9 B |
+*PT1 :                           BB B | *PT2 :                           BD B |
+*PX0 :                           B8 B | *PX1 :                           BA B |
+*RB8 :                           9A B | *RCAP2H :                       0CB D |
+*RCAP2L :                       0CA D | *RCLK :                          CD B |
+*RD :                            B7 B | *REGUSAGE :                       1 - |
+*RELAXED :                        0 - | *REN :                           9C B |
+ RESPONSE :                     75E C | *RESPONSE2 :                    76F C |
+*RI :                            98 B | *RS0 :                           D3 B |
+*RS1 :                           D4 B | *RUN_KEY :                      'R' - |
+*RXD :                           B0 B | *SADDR :                        0A9 D |
+*SADEN :                        0B9 D | *SBUF :                          99 D |
+ SCON :                          98 D | *SM0 :                           9F B |
+*SM1 :                           9E B | *SM2 :                           9D B |
+ SP :                            81 D |  STACK :                         80 - |
+ STATE :                         2F - | *STEP_KEY :                     'S' - |
+*T0 :                            B4 B | *T1 :                            B5 B |
+ T2CON :                        0C8 D | *T2MOD :                        0C9 D |
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 14 - 23.12.2024 16:54:58
+
+
+*TB8 :                           9B B | *TCLK :                          CC B |
+ TCON :                          88 D | *TF0 :                           8D B |
+*TF1 :                           8F B | *TF2 :                           CF B |
+*TH0 :                           8C D | *TH1 :                           8D D |
+*TH2 :                          0CD D | *TI :                            99 B |
+*TIME :                  "16:54:58" - | *TL0 :                           8A D |
+*TL1 :                           8B D | *TL2 :                          0CC D |
+*TMOD :                          89 D |  TR0 :                           8C B |
+*TR1 :                           8E B | *TR2 :                           CA B |
+*TRUE :                           1 - | *TXD :                           B1 B |
+*UPLD_KEY :                     'U' - | *VECTOR :                      2000 - |
+*VERSION :                     142F - | *VTEDIT_KEY :                   'E' - |
+*WR :                            B6 B |  WRONG :                        780 C |
+*WRONG2 :                       791 C | *XOFF :                          13 - |
+*XON :                           11 - |  __BACK0 :                      558 C |
+ __BACK1 :                      564 C | *__BACK10 :                     72E C |
+ __BACK11 :                     735 C |  __BACK2 :                      576 C |
+ __BACK3 :                      58B C |  __BACK4 :                      593 C |
+ __BACK5 :                      5B0 C |  __BACK6 :                      5CD C |
+ __BACK7 :                      5DF C |  __BACK8 :                      606 C |
+ __BACK9 :                      62A C |  __FORW0 :                      570 C |
+ __FORW1 :                      649 C |
+
+    277 symbols
+    197 unused symbols
+
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 15 - 23.12.2024 16:54:58
+
+
+  Defined Macros:
+  ---------------
+
+USING                                 |
+
+      1 macro
+
+ AS V1.42 Beta [Bld 254] - Source File kb.asm - Page 16 - 23.12.2024 16:54:58
+
+
+  Code Pages:
+  ----------
+
+STANDARD (0 changed characters)
+
+1 code page
+
+0.02 seconds assembly time
+
+    802 lines source file
+    820 lines incl. macro expansions
+      2 passes
+      0 errors
+      0 warnings
