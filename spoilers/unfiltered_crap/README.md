@@ -26,7 +26,7 @@ Bunch of useless crap. Nothing to see here.
   * a file SECRET.COM is being transfered
 * Figure out the xmodem frames, there are three and copying the bytes by copy-and-paste is quite trivial
   * The xmodem frames are in packets 1861323, 1987886 and 1994043
-  * Avoid copying the three bytes of header and one byte of checksum
+  * Avoid copying the three bytes of header and two byte of checksum
   * Reconstruct the binary
   * If one really wants to there are suitable xmodem libraries for python and go to parse the frames
 * Load the binary into ghidra like a champ
